@@ -10,7 +10,7 @@ sample-map/
     index.ts               # Bun.serve() on port 3720 (API + static files)
     extract.py             # Python: librosa features + t-SNE → JSON
   client/src/              # SolidJS + Canvas 2D (Vite for dev)
-    App.tsx                # Flex-column layout: canvas area + sequencer
+    App.tsx                # Full-viewport canvas + sequencer overlay
     Sequencer.tsx          # Drum sequencer UI (FL Studio-style step grid)
     engine/
       index.ts             # SampleMapEngine — RAF loop, camera, audio playback
@@ -48,14 +48,16 @@ bun run start    # production build → http://localhost:3720
 
 ### Rendering
 
-- App uses flex-column layout: canvas area (flex: 1) + optional sequencer panel at bottom
-- Canvas area holds header overlay, canvas element, and loading/error overlays
+- Canvas is always full-viewport (`100vw × 100vh`, position absolute); never resizes when sequencer opens
+- Header, sequencer, loading/error overlays are all absolutely positioned on top of the canvas
 - Adapted from claude-code-visualizer's Canvas 2D engine
 - 4-layer parallax starfield (seeded PRNG, deterministic), 2x viewport size centered to avoid visible edges when zoomed out
 - Sample colors derived from t-SNE position (angle → hue), not folder names
 - Glow sizes capped at zoom 1.2 so they don't blow up when zoomed in
-- Dynamic camera bounds: zoom-out limited to fit all nodes, pan rubber-bands back to node bounding box
-- `zoomToFit()` called on initial sample load and on sequencer open/close; accounts for header overlay via `engine.topMargin`
+- Dynamic camera bounds: zoom-out limited to fit all nodes, pan rubber-bands back to node bounding box; bounds account for `topMargin`/`bottomMargin`
+- `zoomToFit()` called on initial sample load and on sequencer open/close; accounts for `engine.topMargin` (header) and `engine.bottomMargin` (sequencer)
+- `zoomToFit()` uses time-based animation (350ms) with `cubic-bezier(0.4, 0, 0.2, 1)` easing, matching the sequencer slide transition
+- `engine.resize()` guards against unnecessary canvas clears — only sets `canvas.width`/`canvas.height` when dimensions actually change
 
 ### Physics (d3-force)
 
@@ -68,14 +70,16 @@ bun run start    # production build → http://localhost:3720
 
 ### Drum Sequencer
 
-- Toggled via "seq" button in header
+- Toggled via "seq" button in header; slides up from the bottom with a 350ms CSS transition (`cubic-bezier(0.4, 0, 0.2, 1)`)
+- Sequencer is always mounted in the DOM (no conditional rendering); hidden via `transform: translateY(100%)`
 - FL Studio-style step grid: 16 steps × 4 tracks (Kick, Snare, Hat, Perc)
 - Each step is a rounded rectangle with a darkened notch at the top center
 - Steps alternate light/dark in groups of 4 (beat grouping)
 - Track colors: Kick = indigo (#818cf8), Snare = red (#ef4444), Hat = yellow (#eab308), Perc = green (#22c55e)
 - Transport bar: play/stop button, BPM number input, swing slider with percentage readout
 - UI only for now — no audio scheduling yet
-- Canvas shrinks to make room (flex-column layout); `engine.resize()` + `zoomToFit()` called on toggle
+- On toggle: sets `engine.bottomMargin` to sequencer height (tracked via `ResizeObserver`) and calls `zoomToFit()`, which animates the camera in sync with the slide
+- Canvas stays full-viewport; the camera zooms out and pans up to keep nodes visible above the sequencer
 
 ### Audio Playback
 

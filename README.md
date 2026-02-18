@@ -32,4 +32,4 @@ All routes are under `/api`:
 
 ## Sequencer
 
-Click **seq** in the header to open the drum sequencer at the bottom of the screen. 16-step grid with 4 tracks: Kick, Snare, Hat, Perc. Includes transport controls (play/stop, BPM, swing). UI only for now — audio scheduling coming soon.
+Click **seq** in the header to open the drum sequencer — it slides up from the bottom while the star map smoothly zooms out and pans up to make room. 16-step grid with 4 tracks: Kick, Snare, Hat, Perc. Includes transport controls (play/stop, BPM, swing). UI only for now — audio scheduling coming soon.
