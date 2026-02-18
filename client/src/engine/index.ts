@@ -45,6 +45,7 @@ export class SampleMapEngine {
   hoveredNode: SampleNode | null = null;
   private mouseScreenX = 0;
   private mouseScreenY = 0;
+  private mouseInWindow = false;
 
   // Audio playback
   private audioCtx: AudioContext | null = null;
@@ -241,6 +242,7 @@ export class SampleMapEngine {
   onPointerMove(x: number, y: number) {
     this.mouseScreenX = x;
     this.mouseScreenY = y;
+    this.mouseInWindow = true;
 
     if (this.dragging) {
       const dx = x - this.dragLastX;
@@ -254,6 +256,12 @@ export class SampleMapEngine {
       const tdx = x - this.clickStartX;
       const tdy = y - this.clickStartY;
       this.dragDistance = Math.sqrt(tdx * tdx + tdy * tdy);
+
+      // Dismiss ring once the user is actually panning (not just clicking)
+      if (this.dragDistance >= 5 && this.selectionRing.active) {
+        dismissRing(this.selectionRing);
+        this.followTarget = null;
+      }
     }
   }
 
@@ -262,6 +270,11 @@ export class SampleMapEngine {
     if (x != null && y != null && this.dragDistance < 5) {
       this.handleClick(x, y);
     }
+  }
+
+  onPointerLeave() {
+    this.mouseInWindow = false;
+    this.dragging = false;
   }
 
   private handleClick(screenX: number, screenY: number) {
@@ -284,6 +297,9 @@ export class SampleMapEngine {
       selectNode(this.selectionRing, closest);
       this.playRingSelection(closest);
       this.followTarget = { x: closest.x, y: closest.y };
+    } else if (this.selectionRing.active) {
+      dismissRing(this.selectionRing);
+      this.followTarget = null;
     }
   }
 
@@ -381,6 +397,14 @@ export class SampleMapEngine {
   };
 
   private updateHover() {
+    // Clear hover when cursor is outside the window
+    if (!this.mouseInWindow) {
+      for (const node of this.nodes) node.hovered = false;
+      this.hoveredNode = null;
+      this.lastPlayedId = null;
+      return;
+    }
+
     const [wx, wy] = this.screenToWorld(this.mouseScreenX, this.mouseScreenY);
     const hitRadius = SAMPLE_RADIUS / this.camera.zoom + 8;
     let closest: SampleNode | null = null;
@@ -399,14 +423,16 @@ export class SampleMapEngine {
 
     if (closest) {
       closest.hovered = true;
-      closest.glow = 1;
 
-      // Trigger audio on new hover
-      if (closest.id !== this.lastPlayedId) {
-        this.lastPlayedId = closest.id;
-        this.playSample(closest);
+      // Only play hover audio when ring is not active
+      if (!this.selectionRing.active) {
+        closest.glow = 1;
+        if (closest.id !== this.lastPlayedId) {
+          this.lastPlayedId = closest.id;
+          this.playSample(closest);
+        }
       }
-    } else {
+    } else if (!this.selectionRing.active) {
       this.lastPlayedId = null;
     }
     this.hoveredNode = closest;
@@ -607,7 +633,7 @@ export class SampleMapEngine {
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
     renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts);
     renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
-    renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode);
+    renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode, this.selectionRing.node);
 
     ctx.restore();
   }

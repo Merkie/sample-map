@@ -128,7 +128,7 @@ export default function App() {
           engine?.onPointerUp(e.clientX, e.clientY);
           e.currentTarget.style.cursor = "grab";
         }}
-        onMouseLeave={() => engine?.onPointerUp()}
+        onMouseLeave={() => engine?.onPointerLeave()}
         onWheel={(e) => {
           e.preventDefault();
           engine?.onWheel(e.deltaY, e.clientX, e.clientY);

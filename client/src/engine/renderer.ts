@@ -168,6 +168,7 @@ export function renderHUD(
   height: number,
   sampleCount: number,
   hoveredNode: SampleNode | null,
+  selectedNode: SampleNode | null,
 ): void {
   // Title (top left)
   ctx.textAlign = "left";
@@ -181,16 +182,17 @@ export function renderHUD(
   ctx.font = "12px monospace";
   ctx.fillText(`${sampleCount} samples`, width - 24, height - 16);
 
-  // Hover tooltip (bottom left)
-  if (hoveredNode) {
+  // Tooltip (bottom left) — hover takes priority, then ring selection
+  const displayNode = hoveredNode || selectedNode;
+  if (displayNode) {
     ctx.textAlign = "left";
     ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
     ctx.font = "12px monospace";
-    ctx.fillText(hoveredNode.relativePath, 24, height - 16);
+    ctx.fillText(displayNode.relativePath, 24, height - 16);
 
-    const [r, g, b] = hexToRgb(hoveredNode.color);
+    const [r, g, b] = hexToRgb(displayNode.color);
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
     ctx.font = "11px monospace";
-    ctx.fillText(hoveredNode.category, 24, height - 34);
+    ctx.fillText(displayNode.category, 24, height - 34);
   }
 }
