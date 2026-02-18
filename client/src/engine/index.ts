@@ -73,6 +73,9 @@ export class SampleMapEngine {
   // Sequencer dimming: when set, only these nodes render at full brightness
   highlightedNodeIds: Set<string> | null = null;
 
+  // Top margin in screen pixels (e.g. for header overlay)
+  topMargin = 0;
+
   // Callbacks
   onSampleCount?: (n: number) => void;
   onNodeSelect?: (node: SampleNode | null) => void;
@@ -657,9 +660,12 @@ export class SampleMapEngine {
   zoomToFit() {
     const bounds = this.getNodeBounds();
     const fitZoomX = this.width / (bounds.hw * 2);
-    const fitZoomY = this.height / (bounds.hh * 2);
-    const targetZoom = Math.max(Math.min(fitZoomX, fitZoomY) * 1.1, 0.05);
-    this.zoomToFitTarget = { x: bounds.cx, y: bounds.cy, zoom: targetZoom };
+    const usableHeight = this.height - this.topMargin;
+    const fitZoomY = usableHeight / (bounds.hh * 2);
+    const targetZoom = Math.max(Math.min(fitZoomX, fitZoomY) * 1.05, 0.05);
+    // Offset camera so nodes center in the usable area below the top margin
+    const targetY = bounds.cy - this.topMargin / (2 * targetZoom);
+    this.zoomToFitTarget = { x: bounds.cx, y: targetY, zoom: targetZoom };
     this.panVelocityX = 0;
     this.panVelocityY = 0;
     this.zoomVelocity = 0;

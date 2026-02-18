@@ -36,6 +36,7 @@ export default function App() {
 
   onMount(() => {
     engine = new SampleMapEngine(canvasRef);
+    engine.topMargin = HEADER_HEIGHT;
     engine.onSampleCount = (n) => setSampleCount(n);
     engine.onNodeSelect = (node) => {
       const idx = armedTrack();
@@ -135,6 +136,7 @@ export default function App() {
       }
       const samples = await res.json();
       engine!.loadSamples(samples);
+      engine!.zoomToFit();
       engine!.start();
       // Pick sequencer samples once on first load
       if (seqSamples().length === 0) {
@@ -161,7 +163,7 @@ export default function App() {
     requestAnimationFrame(() => {
       if (engine) {
         engine.resize();
-        if (next) engine.zoomToFit();
+        engine.zoomToFit();
         if (!engine.playing) engine.render();
       }
     });

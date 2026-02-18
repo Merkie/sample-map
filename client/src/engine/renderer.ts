@@ -22,8 +22,8 @@ export function renderStars(
   const cy = height / 2;
 
   for (const star of stars) {
-    const starX = star.x * width;
-    const starY = star.y * height;
+    const starX = (star.x * 2 - 0.5) * width;
+    const starY = (star.y * 2 - 0.5) * height;
     const panStr = STAR_PARALLAX[star.d];
     const zoomStr = STAR_ZOOM[star.d];
     const px = camera.x * panStr;

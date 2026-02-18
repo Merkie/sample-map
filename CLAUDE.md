@@ -51,10 +51,11 @@ bun run start    # production build → http://localhost:3720
 - App uses flex-column layout: canvas area (flex: 1) + optional sequencer panel at bottom
 - Canvas area holds header overlay, canvas element, and loading/error overlays
 - Adapted from claude-code-visualizer's Canvas 2D engine
-- 4-layer parallax starfield (seeded PRNG, deterministic)
+- 4-layer parallax starfield (seeded PRNG, deterministic), 2x viewport size centered to avoid visible edges when zoomed out
 - Sample colors derived from t-SNE position (angle → hue), not folder names
 - Glow sizes capped at zoom 1.2 so they don't blow up when zoomed in
 - Dynamic camera bounds: zoom-out limited to fit all nodes, pan rubber-bands back to node bounding box
+- `zoomToFit()` called on initial sample load and on sequencer open/close; accounts for header overlay via `engine.topMargin`
 
 ### Physics (d3-force)
 
@@ -74,7 +75,7 @@ bun run start    # production build → http://localhost:3720
 - Track colors: Kick = indigo (#818cf8), Snare = red (#ef4444), Hat = yellow (#eab308), Perc = green (#22c55e)
 - Transport bar: play/stop button, BPM number input, swing slider with percentage readout
 - UI only for now — no audio scheduling yet
-- Canvas shrinks to make room (flex-column layout); `engine.resize()` called on toggle
+- Canvas shrinks to make room (flex-column layout); `engine.resize()` + `zoomToFit()` called on toggle
 
 ### Audio Playback
 
