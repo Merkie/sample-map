@@ -1,6 +1,7 @@
 node_modules/
 client/dist/
 venv/
+samples/
 .sample-map-cache.json
 .DS_Store
 *.pyc
