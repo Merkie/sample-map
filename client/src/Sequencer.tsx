@@ -221,7 +221,7 @@ export default function Sequencer() {
                         style={{
                           position: "relative",
                           flex: "1",
-                          height: "32px",
+                          height: "48px",
                           "min-width": "20px",
                           "border-radius": "5px",
                           background: active

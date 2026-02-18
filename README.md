@@ -1,6 +1,6 @@
 # Sample Map
 
-Interactive audio sample similarity visualizer. Extracts audio features with Python (librosa), reduces to 2D with t-SNE, then renders an interactive Canvas 2D space scene with d3-force physics. Hover over samples to play them.
+Interactive audio sample similarity visualizer with a built-in drum sequencer. Extracts audio features with Python (librosa), reduces to 2D with t-SNE, then renders an interactive Canvas 2D space scene with d3-force physics. Hover over samples to play them. Toggle the step sequencer to build patterns.
 
 ## Setup
 
@@ -29,3 +29,7 @@ All routes are under `/api`:
 - `GET /api/samples` — sample data as JSON. Query params: `maxDuration=2`, `excludeLoops=true`
 - `GET /api/samples/refresh` — bust cache, re-run extraction
 - `GET /api/audio/{path}` — serve audio files from `samples/`
+
+## Sequencer
+
+Click **seq** in the header to open the drum sequencer at the bottom of the screen. 16-step grid with 4 tracks: Kick, Snare, Hat, Perc. Includes transport controls (play/stop, BPM, swing). UI only for now — audio scheduling coming soon.
