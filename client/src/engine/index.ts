@@ -276,6 +276,7 @@ export class SampleMapEngine {
 
     if (closest) {
       selectNode(this.selectionRing, closest);
+      this.playRingSelection(closest);
     }
   }
 
@@ -315,8 +316,9 @@ export class SampleMapEngine {
 
       if (Math.abs(diff) > RING_NAV_CONE_HALF) continue;
 
-      // Score: prefer close + aligned (lower is better)
-      const score = dist * (1 + Math.abs(diff) * 2);
+      // Score: prefer close + generally aligned (lower is better)
+      // Low angular weight so closer off-axis nodes beat far aligned ones
+      const score = dist * (1 + Math.abs(diff) * 0.6);
       if (score < bestScore) {
         bestScore = score;
         best = node;
@@ -325,6 +327,7 @@ export class SampleMapEngine {
 
     if (best) {
       selectNode(this.selectionRing, best);
+      this.playRingSelection(best);
     }
   }
 
@@ -401,6 +404,12 @@ export class SampleMapEngine {
   }
 
   // ===== Audio =====
+
+  private playRingSelection(node: SampleNode) {
+    node.glow = 1;
+    this.lastPlayedId = node.id;
+    this.playSample(node);
+  }
 
   private ensureAudioCtx() {
     if (!this.audioCtx) {

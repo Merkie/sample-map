@@ -21,26 +21,54 @@ export default function App() {
         if (!engine.playing) engine.render();
       }
     };
+    const heldArrows = new Set<string>();
+    const opposingKey: Record<string, string> = {
+      ArrowUp: "ArrowDown", ArrowDown: "ArrowUp",
+      ArrowLeft: "ArrowRight", ArrowRight: "ArrowLeft",
+    };
+    const repeatTimers = new Map<string, ReturnType<typeof setInterval>>();
+    const REPEAT_DELAY = 160;  // ms before repeat starts
+    const REPEAT_RATE = 80;    // ms between repeats
+
+    const fireArrow = (key: string) => {
+      if (heldArrows.has(opposingKey[key])) return;
+      const dir = key.replace("Arrow", "").toLowerCase() as "up" | "down" | "left" | "right";
+      engine?.onArrowKey(dir);
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         engine?.onEscape();
-      } else if (e.key === "ArrowUp") {
+        return;
+      }
+      if (e.key in opposingKey) {
         e.preventDefault();
-        engine?.onArrowKey("up");
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        engine?.onArrowKey("down");
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        engine?.onArrowKey("left");
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        engine?.onArrowKey("right");
+        if (e.repeat) return; // ignore OS repeat, we handle our own
+        heldArrows.add(e.key);
+        fireArrow(e.key);
+        // Start custom repeat: initial delay, then fast interval
+        clearInterval(repeatTimers.get(e.key));
+        const timer = setTimeout(() => {
+          const iv = setInterval(() => fireArrow(e.key), REPEAT_RATE);
+          repeatTimers.set(e.key, iv as any);
+        }, REPEAT_DELAY);
+        repeatTimers.set(e.key, timer as any);
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      heldArrows.delete(e.key);
+      const timer = repeatTimers.get(e.key);
+      if (timer != null) {
+        clearInterval(timer);
+        clearTimeout(timer);
+        repeatTimers.delete(e.key);
       }
     };
 
     window.addEventListener("resize", handleResize);
     window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
 
     // Fetch samples from server
     fetchSamples();
@@ -48,6 +76,7 @@ export default function App() {
     onCleanup(() => {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
       engine?.stop();
     });
   });

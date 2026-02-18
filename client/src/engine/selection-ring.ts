@@ -9,13 +9,10 @@ import {
   RING_NEAR_BOOST,
   RING_STRETCH_RANGE,
   RING_APPEAR_SPEED,
-  RING_MAX_DELAY,
-  RING_BOUNCE_DELAY,
-  RING_BOUNCE_FREQ,
-  RING_BOUNCE_DECAY,
-  RING_BOUNCE_AMOUNT,
   RING_INNER_STIFFNESS_MULT,
   RING_OUTER_STIFFNESS_MULT,
+  RING_NEIGHBOR_STIFFNESS,
+  RING_NEIGHBOR_DAMPING,
 } from "./constants";
 
 const MIN_THICKNESS = RING_OUTER_RADIUS - RING_INNER_RADIUS;
@@ -26,7 +23,6 @@ interface VertexState {
   ox: number; oy: number;   // outer world position
   ovx: number; ovy: number; // outer velocity
   stiffBase: number;
-  delay: number;             // seconds before this vertex starts responding
 }
 
 export interface SelectionRingState {
@@ -34,7 +30,6 @@ export interface SelectionRingState {
   node: SampleNode | null;
   visibility: number;
   targetVisibility: number;
-  bounceTime: number;
   vertices: VertexState[];
 }
 
@@ -47,7 +42,6 @@ export function createSelectionRing(): SelectionRingState {
       ix: 0, iy: 0, ivx: 0, ivy: 0,
       ox: 0, oy: 0, ovx: 0, ovy: 0,
       stiffBase: RING_BASE_STIFFNESS + offset,
-      delay: 0,
     });
   }
   return {
@@ -55,7 +49,6 @@ export function createSelectionRing(): SelectionRingState {
     node: null,
     visibility: 0,
     targetVisibility: 0,
-    bounceTime: 0,
     vertices,
   };
 }
@@ -65,7 +58,6 @@ export function selectNode(ring: SelectionRingState, node: SampleNode): void {
   ring.active = true;
   ring.node = node;
   ring.targetVisibility = 1;
-  ring.bounceTime = 0;
 
   if (!wasActive) {
     // First appearance — all vertices start at node center, spring outward
@@ -75,20 +67,9 @@ export function selectNode(ring: SelectionRingState, node: SampleNode): void {
       v.ox = node.x; v.oy = node.y;
       v.ivx = 0; v.ivy = 0;
       v.ovx = 0; v.ovy = 0;
-      v.delay = 0;
-    }
-  } else {
-    // Jumping — set per-vertex delay based on distance to new target.
-    // Far (back) vertices wait longer before they start responding.
-    for (let i = 0; i < RING_VERTEX_COUNT; i++) {
-      const v = ring.vertices[i];
-      const angle = (i / RING_VERTEX_COUNT) * Math.PI * 2 - Math.PI / 2;
-      const tix = node.x + Math.cos(angle) * RING_INNER_RADIUS;
-      const tiy = node.y + Math.sin(angle) * RING_INNER_RADIUS;
-      const dist = Math.sqrt((tix - v.ix) ** 2 + (tiy - v.iy) ** 2);
-      v.delay = Math.min(dist / RING_STRETCH_RANGE, 1) * RING_MAX_DELAY;
     }
   }
+  // When already active, vertices spring to the new target naturally — no delays
 }
 
 export function dismissRing(ring: SelectionRingState): void {
@@ -111,14 +92,12 @@ export function updateSelectionRing(ring: SelectionRingState, dt: number): void 
     return;
   }
 
-  // Settle bounce: decaying sinusoidal pulse on target radii after arrival
-  ring.bounceTime += dt;
-  const bt = Math.max(0, ring.bounceTime - RING_BOUNCE_DELAY);
-  const bounce = Math.sin(bt * RING_BOUNCE_FREQ) * Math.exp(-bt * RING_BOUNCE_DECAY) * RING_BOUNCE_AMOUNT;
-
-  const innerR = RING_INNER_RADIUS * ring.visibility * (1 + bounce);
-  const outerR = RING_OUTER_RADIUS * ring.visibility * (1 + bounce);
+  const innerR = RING_INNER_RADIUS * ring.visibility;
+  const outerR = RING_OUTER_RADIUS * ring.visibility;
   const minThick = MIN_THICKNESS * ring.visibility;
+
+  // Phase 1: Compute all forces (read positions before modifying any)
+  const forces: { iFx: number; iFy: number; oFx: number; oFy: number }[] = [];
 
   for (let i = 0; i < RING_VERTEX_COUNT; i++) {
     const v = ring.vertices[i];
@@ -126,27 +105,13 @@ export function updateSelectionRing(ring: SelectionRingState, dt: number): void 
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
 
-    // Tick down delay — while waiting, just drift on current velocity
-    if (v.delay > 0) {
-      v.delay = Math.max(0, v.delay - dt);
-      v.ivx *= 0.97;
-      v.ivy *= 0.97;
-      v.ix += v.ivx * dt;
-      v.iy += v.ivy * dt;
-      v.ovx *= 0.97;
-      v.ovy *= 0.97;
-      v.ox += v.ovx * dt;
-      v.oy += v.ovy * dt;
-      continue;
-    }
-
     // Target positions around the node
     const tix = node.x + cos * innerR;
     const tiy = node.y + sin * innerR;
     const tox = node.x + cos * outerR;
     const toy = node.y + sin * outerR;
 
-    // Distance to target — closer vertices get much higher stiffness
+    // Displacement to target
     const idx = tix - v.ix;
     const idy = tiy - v.iy;
     const iDist = Math.sqrt(idx * idx + idy * idy);
@@ -154,6 +119,8 @@ export function updateSelectionRing(ring: SelectionRingState, dt: number): void 
     const ody = toy - v.oy;
     const oDist = Math.sqrt(odx * odx + ody * ody);
 
+    // Distance-based stiffness: close vertices snap faster (leading edge),
+    // far vertices lag behind (trailing edge → stretchy tail)
     const iCloseness = 1 - Math.min(iDist / RING_STRETCH_RANGE, 1);
     const oCloseness = 1 - Math.min(oDist / RING_STRETCH_RANGE, 1);
 
@@ -163,23 +130,62 @@ export function updateSelectionRing(ring: SelectionRingState, dt: number): void 
     const iStiff = v.stiffBase * RING_INNER_STIFFNESS_MULT * iDistFactor;
     const oStiff = v.stiffBase * RING_OUTER_STIFFNESS_MULT * oDistFactor;
 
-    // Power-scaled damping — close vertices get a subtle landing jiggle,
-    // far vertices stay wobbly for the trailing stretch
+    // Power-scaled damping — close vertices damp more (clean landing),
+    // far vertices damp less (wobbly trailing stretch)
     const iDamp = RING_DAMPING * Math.pow(iDistFactor, 0.75);
     const oDamp = RING_DAMPING * Math.pow(oDistFactor, 0.75);
 
-    // Spring physics
-    v.ivx += (idx * iStiff - v.ivx * iDamp) * dt;
-    v.ivy += (idy * iStiff - v.ivy * iDamp) * dt;
+    // Spring force toward target
+    let iFx = idx * iStiff - v.ivx * iDamp;
+    let iFy = idy * iStiff - v.ivy * iDamp;
+    let oFx = odx * oStiff - v.ovx * oDamp;
+    let oFy = ody * oStiff - v.ovy * oDamp;
+
+    // Neighbor cohesion: pull toward midpoint of adjacent vertices
+    const prev = ring.vertices[(i - 1 + RING_VERTEX_COUNT) % RING_VERTEX_COUNT];
+    const next = ring.vertices[(i + 1) % RING_VERTEX_COUNT];
+
+    // Inner cohesion
+    const iMidX = (prev.ix + next.ix) / 2;
+    const iMidY = (prev.iy + next.iy) / 2;
+    iFx += (iMidX - v.ix) * RING_NEIGHBOR_STIFFNESS;
+    iFy += (iMidY - v.iy) * RING_NEIGHBOR_STIFFNESS;
+
+    // Neighbor velocity damping (reduces relative velocity → prevents striping)
+    iFx += (prev.ivx + next.ivx - v.ivx * 2) * RING_NEIGHBOR_DAMPING;
+    iFy += (prev.ivy + next.ivy - v.ivy * 2) * RING_NEIGHBOR_DAMPING;
+
+    // Outer cohesion
+    const oMidX = (prev.ox + next.ox) / 2;
+    const oMidY = (prev.oy + next.oy) / 2;
+    oFx += (oMidX - v.ox) * RING_NEIGHBOR_STIFFNESS;
+    oFy += (oMidY - v.oy) * RING_NEIGHBOR_STIFFNESS;
+
+    oFx += (prev.ovx + next.ovx - v.ovx * 2) * RING_NEIGHBOR_DAMPING;
+    oFy += (prev.ovy + next.ovy - v.ovy * 2) * RING_NEIGHBOR_DAMPING;
+
+    forces.push({ iFx, iFy, oFx, oFy });
+  }
+
+  // Phase 2: Integrate all vertices
+  for (let i = 0; i < RING_VERTEX_COUNT; i++) {
+    const v = ring.vertices[i];
+    const f = forces[i];
+    const angle = (i / RING_VERTEX_COUNT) * Math.PI * 2 - Math.PI / 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    v.ivx += f.iFx * dt;
+    v.ivy += f.iFy * dt;
     v.ix += v.ivx * dt;
     v.iy += v.ivy * dt;
 
-    v.ovx += (odx * oStiff - v.ovx * oDamp) * dt;
-    v.ovy += (ody * oStiff - v.ovy * oDamp) * dt;
+    v.ovx += f.oFx * dt;
+    v.ovy += f.oFy * dt;
     v.ox += v.ovx * dt;
     v.oy += v.ovy * dt;
 
-    // Enforce minimum thickness: outer must not be closer to center than inner
+    // Enforce minimum thickness: outer must not collapse inside inner
     const dx = v.ox - v.ix;
     const dy = v.oy - v.iy;
     const thickness = Math.sqrt(dx * dx + dy * dy);
