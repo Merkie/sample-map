@@ -18,14 +18,14 @@ export const DEFAULT_COLOR = "#7c8db5";
 
 // Physics config (d3-force)
 export const physicsConfig = {
-  positionStrength: 0.12,       // softer pull toward t-SNE targets (links do the clustering)
-  chargeStrength: -40,          // base repulsion
-  collideRadius: 14,            // prevent overlap
-  neighborK: 5,                 // k-nearest neighbors to link
-  linkDistanceMin: 8,           // closest neighbors
-  linkDistanceMax: 60,          // furthest of the k neighbors
-  linkStrength: 0.4,            // how strongly links pull
-  velocityDecay: 0.35,          // damping (higher = less jelly)
+  positionStrength: 0.12, // softer pull toward t-SNE targets (links do the clustering)
+  chargeStrength: -40, // base repulsion
+  collideRadius: 14, // prevent overlap
+  neighborK: 5, // k-nearest neighbors to link
+  linkDistanceMin: 8, // closest neighbors
+  linkDistanceMax: 60, // furthest of the k neighbors
+  linkStrength: 0.4, // how strongly links pull
+  velocityDecay: 0.35, // damping (higher = less jelly)
   preSettleTicks: 400,
 };
 
@@ -38,6 +38,7 @@ export const ZOOM_MAX = 5;
 export const ZOOM_FRICTION = 0.88;
 export const ZOOM_SNAP_BACK_STIFFNESS = 0.12;
 export const ZOOM_WHEEL_SENSITIVITY = -0.000055;
+export const CAM_FOLLOW_LERP = 0.08; // lerp speed when following selection ring
 
 // Sample dot rendering
 export const SAMPLE_RADIUS = 6;
@@ -52,13 +53,13 @@ export const RING_INNER_RADIUS = 14;
 export const RING_OUTER_RADIUS = 20;
 export const RING_BASE_STIFFNESS = 180;
 export const RING_STIFFNESS_VARIATION = 12;
-export const RING_DAMPING = 8;                   // lower = more elastic jiggle on arrival
+export const RING_DAMPING = 8; // lower = more elastic jiggle on arrival
 export const RING_NEAR_BOOST = 8;
 export const RING_STRETCH_RANGE = 80;
 export const RING_APPEAR_SPEED = 40;
-export const RING_NEIGHBOR_STIFFNESS = 60;       // pulls vertices toward adjacent neighbors (prevents striping)
-export const RING_NEIGHBOR_DAMPING = 3;          // dampens relative velocity between neighbors
+export const RING_NEIGHBOR_STIFFNESS = 60; // pulls vertices toward adjacent neighbors (prevents striping)
+export const RING_NEIGHBOR_DAMPING = 3; // dampens relative velocity between neighbors
 export const RING_NAV_MAX_DIST = 300;
-export const RING_NAV_CONE_HALF = Math.PI * 5 / 12;  // ±75° cone (wider for offset grids)
+export const RING_NAV_CONE_HALF = (Math.PI * 5) / 12; // ±75° cone (wider for offset grids)
 export const RING_INNER_STIFFNESS_MULT = 1.3;
 export const RING_OUTER_STIFFNESS_MULT = 0.85;

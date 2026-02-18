@@ -12,9 +12,10 @@ import {
   ZOOM_MIN, ZOOM_MAX, ZOOM_FRICTION, ZOOM_SNAP_BACK_STIFFNESS, ZOOM_WHEEL_SENSITIVITY,
   SAMPLE_RADIUS, SAMPLE_GLOW_DECAY,
   RING_NAV_MAX_DIST, RING_NAV_CONE_HALF,
+  CAM_FOLLOW_LERP,
   physicsConfig,
 } from "./constants";
-import { clamp, hslToHex } from "./utils";
+import { clamp, hslToHex, lerp } from "./utils";
 
 export class SampleMapEngine {
   canvas: HTMLCanvasElement;
@@ -53,6 +54,9 @@ export class SampleMapEngine {
 
   // Selection ring
   selectionRing = createSelectionRing();
+
+  // Camera follow (ring selection tracking)
+  private followTarget: { x: number; y: number } | null = null;
 
   // Click detection
   private clickStartX = 0;
@@ -203,6 +207,7 @@ export class SampleMapEngine {
     this.panVelocityY = 0;
     this.zoomVelocity = 0;
     this.dragging = false;
+    this.followTarget = null;
   }
 
   private stopAllAudio() {
@@ -230,6 +235,7 @@ export class SampleMapEngine {
     this.dragDistance = 0;
     this.panVelocityX = 0;
     this.panVelocityY = 0;
+    this.followTarget = null;
   }
 
   onPointerMove(x: number, y: number) {
@@ -277,12 +283,14 @@ export class SampleMapEngine {
     if (closest) {
       selectNode(this.selectionRing, closest);
       this.playRingSelection(closest);
+      this.followTarget = { x: closest.x, y: closest.y };
     }
   }
 
   onEscape() {
     if (this.selectionRing.active) {
       dismissRing(this.selectionRing);
+      this.followTarget = null;
     }
   }
 
@@ -328,6 +336,7 @@ export class SampleMapEngine {
     if (best) {
       selectNode(this.selectionRing, best);
       this.playRingSelection(best);
+      this.followTarget = { x: best.x, y: best.y };
     }
   }
 
@@ -408,7 +417,7 @@ export class SampleMapEngine {
   private playRingSelection(node: SampleNode) {
     node.glow = 1;
     this.lastPlayedId = node.id;
-    this.playSample(node);
+    this.playSample(node, true);
   }
 
   private ensureAudioCtx() {
@@ -421,7 +430,7 @@ export class SampleMapEngine {
     return this.audioCtx;
   }
 
-  private async playSample(node: SampleNode) {
+  private async playSample(node: SampleNode, force = false) {
     const ctx = this.ensureAudioCtx();
     const url = `/api/audio/${encodeURIComponent(node.relativePath)}`;
 
@@ -438,8 +447,8 @@ export class SampleMapEngine {
       }
     }
 
-    // Don't play if hover already moved on while fetching
-    if (this.lastPlayedId !== node.id) return;
+    // Don't play if hover already moved on while fetching (skip check for forced plays)
+    if (!force && this.lastPlayedId !== node.id) return;
 
     // Cap simultaneous voices — fade oldest if too many
     const MAX_VOICES = 8;
@@ -499,6 +508,15 @@ export class SampleMapEngine {
     const [vx, vy] = updateFreeCamera(this.camera, this.panVelocityX, this.panVelocityY, this.dragging);
     this.panVelocityX = vx;
     this.panVelocityY = vy;
+
+    // Follow selection ring target
+    if (this.followTarget && !this.dragging) {
+      this.camera.x = lerp(this.camera.x, this.followTarget.x, CAM_FOLLOW_LERP);
+      this.camera.y = lerp(this.camera.y, this.followTarget.y, CAM_FOLLOW_LERP);
+      // Kill pan momentum while following
+      this.panVelocityX = 0;
+      this.panVelocityY = 0;
+    }
 
     // Dynamic zoom min: just enough to fit all nodes on screen
     const bounds = this.getNodeBounds();

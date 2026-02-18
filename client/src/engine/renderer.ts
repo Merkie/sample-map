@@ -65,9 +65,8 @@ export function renderSamples(
     const [r, g, b] = hexToRgb(node.color);
     const pulse = 0.5 + 0.5 * Math.sin(time * 2 + node.tsneX * 0.05);
     const baseGlow = 0.04 + pulse * 0.03;
-    const hoverBoost = node.hovered ? 0.3 : 0;
-    const glowAlpha = baseGlow + node.glow * 0.25 + hoverBoost;
-    const glowWorld = SAMPLE_RADIUS * (2.5 + node.glow * 4 + (node.hovered ? 2 : 0));
+    const glowAlpha = baseGlow + node.glow * 0.25;
+    const glowWorld = SAMPLE_RADIUS * (2.5 + node.glow * 4);
     const glowSize = glowWorld * Math.min(camera.zoom, 1.2);
 
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${glowAlpha})`;
@@ -75,8 +74,8 @@ export function renderSamples(
     ctx.arc(x, y, glowSize, 0, Math.PI * 2);
     ctx.fill();
 
-    if (node.glow > 0.1 || node.hovered) {
-      const innerGlow = Math.max(node.glow, node.hovered ? 0.4 : 0);
+    if (node.glow > 0.1) {
+      const innerGlow = node.glow;
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${innerGlow * 0.35})`;
       const innerWorld = SAMPLE_RADIUS * (1.8 + innerGlow * 1.5);
       const innerSize = innerWorld * Math.min(camera.zoom, 1.2);
@@ -94,20 +93,13 @@ export function renderSamples(
 
     const [r, g, b] = hexToRgb(node.color);
 
-    if (node.hovered) {
-      ctx.shadowColor = node.color;
-      ctx.shadowBlur = 18 * Math.min(camera.zoom, 1.2);
-    }
-
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.85 + node.glow * 0.15})`;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.shadowBlur = 0;
-
     // Hot white center
-    const centerAlpha = 0.35 + node.glow * 0.5 + (node.hovered ? 0.3 : 0);
+    const centerAlpha = 0.35 + node.glow * 0.5;
     ctx.fillStyle = `rgba(255, 255, 255, ${centerAlpha})`;
     ctx.beginPath();
     ctx.arc(x, y, radius * 0.35, 0, Math.PI * 2);
