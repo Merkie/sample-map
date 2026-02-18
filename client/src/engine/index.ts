@@ -17,6 +17,21 @@ import {
 } from "./constants";
 import { clamp, hslToHex, lerp } from "./utils";
 
+/** cubic-bezier(0.4, 0, 0.2, 1) easing — matches CSS transition */
+function cubicBezier04_02(t: number): number {
+  if (t <= 0) return 0;
+  if (t >= 1) return 1;
+  // Binary search for bezier parameter u where x(u) = t
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 16; i++) {
+    const u = (lo + hi) / 2;
+    const x = 3 * (1 - u) * (1 - u) * u * 0.4 + 3 * (1 - u) * u * u * 0.2 + u * u * u;
+    if (x < t) lo = u; else hi = u;
+  }
+  const u = (lo + hi) / 2;
+  return 3 * (1 - u) * (1 - u) * u * 0 + 3 * (1 - u) * u * u * 1 + u * u * u;
+}
+
 export class SampleMapEngine {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
@@ -59,8 +74,13 @@ export class SampleMapEngine {
   // Camera follow (ring selection tracking)
   private followTarget: { x: number; y: number } | null = null;
 
-  // Animated zoom-to-fit target
-  private zoomToFitTarget: { x: number; y: number; zoom: number } | null = null;
+  // Animated zoom-to-fit target (time-based with cubic-bezier easing)
+  private zoomToFitTarget: {
+    x: number; y: number; zoom: number;
+    startX: number; startY: number; startZoom: number;
+    startTime: number;
+  } | null = null;
+  private static readonly ZTF_DURATION = 350; // ms — matches CSS transition
 
   // Click detection
   private clickStartX = 0;
@@ -573,25 +593,23 @@ export class SampleMapEngine {
       this.panVelocityY = 0;
     }
 
-    // Animated zoom-to-fit
+    // Animated zoom-to-fit (time-based, cubic-bezier matches CSS transition)
     if (this.zoomToFitTarget && !this.dragging) {
       const t = this.zoomToFitTarget;
-      const lerpSpeed = 0.15;
-      this.camera.x = lerp(this.camera.x, t.x, lerpSpeed);
-      this.camera.y = lerp(this.camera.y, t.y, lerpSpeed);
-      this.camera.zoom = lerp(this.camera.zoom, t.zoom, lerpSpeed);
+      const elapsed = performance.now() - t.startTime;
+      const progress = Math.min(elapsed / SampleMapEngine.ZTF_DURATION, 1);
+      // cubic-bezier(0.4, 0, 0.2, 1) — same as CSS transition
+      const eased = cubicBezier04_02(progress);
+      this.camera.x = t.startX + (t.x - t.startX) * eased;
+      this.camera.y = t.startY + (t.y - t.startY) * eased;
+      this.camera.zoom = t.startZoom + (t.zoom - t.startZoom) * eased;
       this.panVelocityX = 0;
       this.panVelocityY = 0;
       this.zoomVelocity = 0;
-      // Settle once close enough
-      if (
-        Math.abs(this.camera.zoom - t.zoom) < 0.002 &&
-        Math.abs(this.camera.x - t.x) < 0.5 &&
-        Math.abs(this.camera.y - t.y) < 0.5
-      ) {
-        this.camera.zoom = t.zoom;
+      if (progress >= 1) {
         this.camera.x = t.x;
         this.camera.y = t.y;
+        this.camera.zoom = t.zoom;
         this.zoomToFitTarget = null;
       }
     }
@@ -673,7 +691,11 @@ export class SampleMapEngine {
     // Offset camera so nodes center in the usable area between top and bottom margins
     const marginOffset = (this.topMargin - this.bottomMargin) / (2 * targetZoom);
     const targetY = bounds.cy - marginOffset;
-    this.zoomToFitTarget = { x: bounds.cx, y: targetY, zoom: targetZoom };
+    this.zoomToFitTarget = {
+      x: bounds.cx, y: targetY, zoom: targetZoom,
+      startX: this.camera.x, startY: this.camera.y, startZoom: this.camera.zoom,
+      startTime: performance.now(),
+    };
     this.panVelocityX = 0;
     this.panVelocityY = 0;
     this.zoomVelocity = 0;
