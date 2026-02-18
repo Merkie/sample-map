@@ -73,8 +73,9 @@ export class SampleMapEngine {
   // Sequencer dimming: when set, only these nodes render at full brightness
   highlightedNodeIds: Set<string> | null = null;
 
-  // Top margin in screen pixels (e.g. for header overlay)
+  // Margins in screen pixels (e.g. for header/sequencer overlays)
   topMargin = 0;
+  bottomMargin = 0;
 
   // Callbacks
   onSampleCount?: (n: number) => void;
@@ -92,8 +93,12 @@ export class SampleMapEngine {
     const rect = this.canvas.getBoundingClientRect();
     this.width = rect.width;
     this.height = rect.height;
-    this.canvas.width = rect.width * this.dpr;
-    this.canvas.height = rect.height * this.dpr;
+    const w = Math.round(rect.width * this.dpr);
+    const h = Math.round(rect.height * this.dpr);
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
   }
 
   private generateStars() {
@@ -571,7 +576,7 @@ export class SampleMapEngine {
     // Animated zoom-to-fit
     if (this.zoomToFitTarget && !this.dragging) {
       const t = this.zoomToFitTarget;
-      const lerpSpeed = 0.08;
+      const lerpSpeed = 0.15;
       this.camera.x = lerp(this.camera.x, t.x, lerpSpeed);
       this.camera.y = lerp(this.camera.y, t.y, lerpSpeed);
       this.camera.zoom = lerp(this.camera.zoom, t.zoom, lerpSpeed);
@@ -591,10 +596,11 @@ export class SampleMapEngine {
       }
     }
 
-    // Dynamic zoom min: just enough to fit all nodes on screen
+    // Dynamic zoom min: just enough to fit all nodes in usable screen area
     const bounds = this.getNodeBounds();
     const fitZoomX = this.width / (bounds.hw * 2);
-    const fitZoomY = this.height / (bounds.hh * 2);
+    const usableH = this.height - this.topMargin - this.bottomMargin;
+    const fitZoomY = usableH / (bounds.hh * 2);
     const dynamicZoomMin = Math.max(Math.min(fitZoomX, fitZoomY) * 0.8, 0.05);
 
     // Velocity-based zoom with rubber banding
@@ -622,17 +628,18 @@ export class SampleMapEngine {
     }
 
     // Pan bounding: spring the camera back toward node bounds
+    // Offset center to account for top/bottom margin (header, sequencer)
+    const marginOffsetY = (this.topMargin - this.bottomMargin) / (2 * this.camera.zoom);
     const viewHW = (this.width / 2) / this.camera.zoom;
     const viewHH = (this.height / 2) / this.camera.zoom;
     const panMinX = bounds.cx - bounds.hw + viewHW;
     const panMaxX = bounds.cx + bounds.hw - viewHW;
-    const panMinY = bounds.cy - bounds.hh + viewHH;
-    const panMaxY = bounds.cy + bounds.hh - viewHH;
+    const panMinY = bounds.cy - bounds.hh + viewHH - marginOffsetY;
+    const panMaxY = bounds.cy + bounds.hh - viewHH - marginOffsetY;
 
     const snapStrength = this.dragging ? 0.02 : 0.08;
 
     if (panMinX > panMaxX) {
-      // Viewport wider than bounds — center
       const target = bounds.cx;
       this.camera.x += (target - this.camera.x) * snapStrength;
     } else {
@@ -641,7 +648,7 @@ export class SampleMapEngine {
     }
 
     if (panMinY > panMaxY) {
-      const target = bounds.cy;
+      const target = bounds.cy - marginOffsetY;
       this.camera.y += (target - this.camera.y) * snapStrength;
     } else {
       if (this.camera.y < panMinY) this.camera.y += (panMinY - this.camera.y) * snapStrength;
@@ -660,11 +667,12 @@ export class SampleMapEngine {
   zoomToFit() {
     const bounds = this.getNodeBounds();
     const fitZoomX = this.width / (bounds.hw * 2);
-    const usableHeight = this.height - this.topMargin;
+    const usableHeight = this.height - this.topMargin - this.bottomMargin;
     const fitZoomY = usableHeight / (bounds.hh * 2);
     const targetZoom = Math.max(Math.min(fitZoomX, fitZoomY) * 1.05, 0.05);
-    // Offset camera so nodes center in the usable area below the top margin
-    const targetY = bounds.cy - this.topMargin / (2 * targetZoom);
+    // Offset camera so nodes center in the usable area between top and bottom margins
+    const marginOffset = (this.topMargin - this.bottomMargin) / (2 * targetZoom);
+    const targetY = bounds.cy - marginOffset;
     this.zoomToFitTarget = { x: bounds.cx, y: targetY, zoom: targetZoom };
     this.panVelocityX = 0;
     this.panVelocityY = 0;
