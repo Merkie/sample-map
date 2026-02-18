@@ -5,7 +5,8 @@ import type { SampleNode } from "./types";
 import type { Camera } from "./camera";
 import { updateFreeCamera } from "./camera";
 import { createSimulation, preSettle, tickSimulation, syncFromSimulation, stopSimulation } from "./physics";
-import { renderStars, renderSamples, renderHUD } from "./renderer";
+import { renderStars, renderSamples, renderSelectionRing, renderHUD } from "./renderer";
+import { createSelectionRing, selectNode, dismissRing, updateSelectionRing } from "./selection-ring";
 import {
   TSNE_SCALE,
   ZOOM_MIN, ZOOM_MAX, ZOOM_FRICTION, ZOOM_SNAP_BACK_STIFFNESS, ZOOM_WHEEL_SENSITIVITY,
@@ -48,6 +49,14 @@ export class SampleMapEngine {
   private audioCache = new Map<string, AudioBuffer>();
   private audioPlaying = new Map<string, { source: AudioBufferSourceNode; gain: GainNode }>();
   private lastPlayedId: string | null = null;
+
+  // Selection ring
+  selectionRing = createSelectionRing();
+
+  // Click detection
+  private clickStartX = 0;
+  private clickStartY = 0;
+  private dragDistance = 0;
 
   // Stars cache
   private stars: Array<{ x: number; y: number; b: number; s: number; d: number }> = [];
@@ -187,6 +196,7 @@ export class SampleMapEngine {
     this.nodes = [];
     this.hoveredNode = null;
     this.lastPlayedId = null;
+    this.selectionRing = createSelectionRing();
     this.camera = { x: 0, y: 0, zoom: 1.5 };
     this.panVelocityX = 0;
     this.panVelocityY = 0;
@@ -214,6 +224,9 @@ export class SampleMapEngine {
     this.dragging = true;
     this.dragLastX = x;
     this.dragLastY = y;
+    this.clickStartX = x;
+    this.clickStartY = y;
+    this.dragDistance = 0;
     this.panVelocityX = 0;
     this.panVelocityY = 0;
   }
@@ -231,11 +244,44 @@ export class SampleMapEngine {
       this.panVelocityY = -dy / this.camera.zoom;
       this.dragLastX = x;
       this.dragLastY = y;
+      const tdx = x - this.clickStartX;
+      const tdy = y - this.clickStartY;
+      this.dragDistance = Math.sqrt(tdx * tdx + tdy * tdy);
     }
   }
 
-  onPointerUp() {
+  onPointerUp(x?: number, y?: number) {
     this.dragging = false;
+    if (x != null && y != null && this.dragDistance < 5) {
+      this.handleClick(x, y);
+    }
+  }
+
+  private handleClick(screenX: number, screenY: number) {
+    const [wx, wy] = this.screenToWorld(screenX, screenY);
+    const hitRadius = SAMPLE_RADIUS / this.camera.zoom + 8;
+    let closest: SampleNode | null = null;
+    let closestDist = Infinity;
+
+    for (const node of this.nodes) {
+      const dx = node.x - wx;
+      const dy = node.y - wy;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < hitRadius && dist < closestDist) {
+        closest = node;
+        closestDist = dist;
+      }
+    }
+
+    if (closest) {
+      selectNode(this.selectionRing, closest);
+    }
+  }
+
+  onEscape() {
+    if (this.selectionRing.active) {
+      dismissRing(this.selectionRing);
+    }
   }
 
   onWheel(deltaY: number, x: number, y: number) {
@@ -268,6 +314,9 @@ export class SampleMapEngine {
 
     // Hit-test hover
     this.updateHover();
+
+    // Selection ring spring physics
+    updateSelectionRing(this.selectionRing, dt);
 
     this.updateCamera();
     this.render();
@@ -486,6 +535,7 @@ export class SampleMapEngine {
     const wts = this.worldToScreen.bind(this);
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
     renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts);
+    renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
     renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode);
 
     ctx.restore();

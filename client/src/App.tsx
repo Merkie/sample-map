@@ -21,13 +21,21 @@ export default function App() {
         if (!engine.playing) engine.render();
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        engine?.onEscape();
+      }
+    };
+
     window.addEventListener("resize", handleResize);
+    window.addEventListener("keydown", handleKeyDown);
 
     // Fetch samples from server
     fetchSamples();
 
     onCleanup(() => {
       window.removeEventListener("resize", handleResize);
+      window.removeEventListener("keydown", handleKeyDown);
       engine?.stop();
     });
   });
@@ -76,7 +84,7 @@ export default function App() {
         }}
         onMouseMove={(e) => engine?.onPointerMove(e.clientX, e.clientY)}
         onMouseUp={(e) => {
-          engine?.onPointerUp();
+          engine?.onPointerUp(e.clientX, e.clientY);
           e.currentTarget.style.cursor = "grab";
         }}
         onMouseLeave={() => engine?.onPointerUp()}

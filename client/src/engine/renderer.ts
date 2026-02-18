@@ -1,7 +1,8 @@
 import type { SampleNode } from "./types";
 import type { Camera } from "./camera";
+import type { SelectionRingState } from "./selection-ring";
 import { hexToRgb } from "./utils";
-import { SAMPLE_RADIUS, HUD_TITLE } from "./constants";
+import { SAMPLE_RADIUS, HUD_TITLE, RING_VERTEX_COUNT } from "./constants";
 
 type Star = { x: number; y: number; b: number; s: number; d: number };
 type WorldToScreen = (wx: number, wy: number) => [number, number];
@@ -114,6 +115,59 @@ export function renderSamples(
 
 
   }
+}
+
+export function renderSelectionRing(
+  ctx: CanvasRenderingContext2D,
+  ring: SelectionRingState,
+  worldToScreen: WorldToScreen,
+  zoom: number,
+): void {
+  if (!ring.active || ring.visibility < 0.01) return;
+
+  const innerPts: [number, number][] = [];
+  const outerPts: [number, number][] = [];
+
+  for (let i = 0; i < RING_VERTEX_COUNT; i++) {
+    const v = ring.vertices[i];
+    innerPts.push(worldToScreen(v.ix, v.iy));
+    outerPts.push(worldToScreen(v.ox, v.oy));
+  }
+
+  const alpha = ring.visibility * 0.6;
+
+  // Soft outer glow
+  ctx.save();
+  ctx.shadowColor = `rgba(255, 255, 255, ${alpha * 0.5})`;
+  ctx.shadowBlur = 8 * Math.min(zoom, 1.2);
+
+  // Ring fill: outer path + inner hole via even-odd
+  ctx.beginPath();
+  ctx.moveTo(outerPts[0][0], outerPts[0][1]);
+  for (let i = 1; i < RING_VERTEX_COUNT; i++) {
+    ctx.lineTo(outerPts[i][0], outerPts[i][1]);
+  }
+  ctx.closePath();
+  ctx.moveTo(innerPts[0][0], innerPts[0][1]);
+  for (let i = RING_VERTEX_COUNT - 1; i >= 0; i--) {
+    ctx.lineTo(innerPts[i][0], innerPts[i][1]);
+  }
+  ctx.closePath();
+
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.fill("evenodd");
+  ctx.restore();
+
+  // Thin outer stroke
+  ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.35})`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(outerPts[0][0], outerPts[0][1]);
+  for (let i = 1; i < RING_VERTEX_COUNT; i++) {
+    ctx.lineTo(outerPts[i][0], outerPts[i][1]);
+  }
+  ctx.closePath();
+  ctx.stroke();
 }
 
 export function renderHUD(
