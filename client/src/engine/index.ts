@@ -59,6 +59,9 @@ export class SampleMapEngine {
   // Camera follow (ring selection tracking)
   private followTarget: { x: number; y: number } | null = null;
 
+  // Animated zoom-to-fit target
+  private zoomToFitTarget: { x: number; y: number; zoom: number } | null = null;
+
   // Click detection
   private clickStartX = 0;
   private clickStartY = 0;
@@ -67,8 +70,12 @@ export class SampleMapEngine {
   // Stars cache
   private stars: Array<{ x: number; y: number; b: number; s: number; d: number }> = [];
 
+  // Sequencer dimming: when set, only these nodes render at full brightness
+  highlightedNodeIds: Set<string> | null = null;
+
   // Callbacks
   onSampleCount?: (n: number) => void;
+  onNodeSelect?: (node: SampleNode | null) => void;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -237,6 +244,7 @@ export class SampleMapEngine {
     this.panVelocityX = 0;
     this.panVelocityY = 0;
     this.followTarget = null;
+    this.zoomToFitTarget = null;
   }
 
   onPointerMove(x: number, y: number) {
@@ -297,9 +305,13 @@ export class SampleMapEngine {
       selectNode(this.selectionRing, closest);
       this.playRingSelection(closest);
       this.followTarget = { x: closest.x, y: closest.y };
-    } else if (this.selectionRing.active) {
-      dismissRing(this.selectionRing);
-      this.followTarget = null;
+      this.onNodeSelect?.(closest);
+    } else {
+      if (this.selectionRing.active) {
+        dismissRing(this.selectionRing);
+        this.followTarget = null;
+      }
+      this.onNodeSelect?.(null);
     }
   }
 
@@ -353,6 +365,7 @@ export class SampleMapEngine {
       selectNode(this.selectionRing, best);
       this.playRingSelection(best);
       this.followTarget = { x: best.x, y: best.y };
+      this.onNodeSelect?.(best);
     }
   }
 
@@ -360,6 +373,7 @@ export class SampleMapEngine {
     this.zoomFocalScreenX = x;
     this.zoomFocalScreenY = y;
     this.zoomVelocity += deltaY * ZOOM_WHEEL_SENSITIVITY * this.camera.zoom;
+    this.zoomToFitTarget = null;
   }
 
   // ===== Main Loop =====
@@ -438,6 +452,13 @@ export class SampleMapEngine {
     this.hoveredNode = closest;
   }
 
+  /** Programmatically select + focus a node (ring, camera follow, play sound) */
+  focusNode(node: SampleNode) {
+    selectNode(this.selectionRing, node);
+    this.playRingSelection(node);
+    this.followTarget = { x: node.x, y: node.y };
+  }
+
   // ===== Audio =====
 
   private playRingSelection(node: SampleNode) {
@@ -456,7 +477,7 @@ export class SampleMapEngine {
     return this.audioCtx;
   }
 
-  private async playSample(node: SampleNode, force = false) {
+  async playSample(node: SampleNode, force = false) {
     const ctx = this.ensureAudioCtx();
     const url = `/api/audio/${encodeURIComponent(node.relativePath)}`;
 
@@ -544,6 +565,29 @@ export class SampleMapEngine {
       this.panVelocityY = 0;
     }
 
+    // Animated zoom-to-fit
+    if (this.zoomToFitTarget && !this.dragging) {
+      const t = this.zoomToFitTarget;
+      const lerpSpeed = 0.08;
+      this.camera.x = lerp(this.camera.x, t.x, lerpSpeed);
+      this.camera.y = lerp(this.camera.y, t.y, lerpSpeed);
+      this.camera.zoom = lerp(this.camera.zoom, t.zoom, lerpSpeed);
+      this.panVelocityX = 0;
+      this.panVelocityY = 0;
+      this.zoomVelocity = 0;
+      // Settle once close enough
+      if (
+        Math.abs(this.camera.zoom - t.zoom) < 0.002 &&
+        Math.abs(this.camera.x - t.x) < 0.5 &&
+        Math.abs(this.camera.y - t.y) < 0.5
+      ) {
+        this.camera.zoom = t.zoom;
+        this.camera.x = t.x;
+        this.camera.y = t.y;
+        this.zoomToFitTarget = null;
+      }
+    }
+
     // Dynamic zoom min: just enough to fit all nodes on screen
     const bounds = this.getNodeBounds();
     const fitZoomX = this.width / (bounds.hw * 2);
@@ -609,6 +653,19 @@ export class SampleMapEngine {
     ];
   }
 
+  /** Smoothly animate camera to fit all nodes on screen */
+  zoomToFit() {
+    const bounds = this.getNodeBounds();
+    const fitZoomX = this.width / (bounds.hw * 2);
+    const fitZoomY = this.height / (bounds.hh * 2);
+    const targetZoom = Math.max(Math.min(fitZoomX, fitZoomY) * 1.1, 0.05);
+    this.zoomToFitTarget = { x: bounds.cx, y: bounds.cy, zoom: targetZoom };
+    this.panVelocityX = 0;
+    this.panVelocityY = 0;
+    this.zoomVelocity = 0;
+    this.followTarget = null;
+  }
+
   // ===== Rendering =====
 
   render() {
@@ -631,7 +688,7 @@ export class SampleMapEngine {
 
     const wts = this.worldToScreen.bind(this);
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
-    renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts);
+    renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts, this.highlightedNodeIds ?? undefined);
     renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
     renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode, this.selectionRing.node);
 

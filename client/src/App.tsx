@@ -1,9 +1,27 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { SampleMapEngine } from "./engine";
+import type { SampleNode } from "./engine";
 import Sequencer from "./Sequencer";
 
 
 const HEADER_HEIGHT = 30;
+
+/** Pick one random sample from each of up to 4 distinct categories */
+function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
+  const byCategory = new Map<string, SampleNode[]>();
+  for (const node of nodes) {
+    const list = byCategory.get(node.category) || [];
+    list.push(node);
+    byCategory.set(node.category, list);
+  }
+
+  // Take up to 4 categories
+  const categories = [...byCategory.keys()].slice(0, 4);
+  return categories.map((cat) => {
+    const list = byCategory.get(cat)!;
+    return list[Math.floor(Math.random() * list.length)];
+  });
+}
 
 export default function App() {
   let canvasRef!: HTMLCanvasElement;
@@ -13,10 +31,31 @@ export default function App() {
   const [error, setError] = createSignal<string | null>(null);
   const [sampleCount, setSampleCount] = createSignal(0);
   const [seqActive, setSeqActive] = createSignal(false);
+  const [seqSamples, setSeqSamples] = createSignal<SampleNode[]>([]);
+  const [armedTrack, setArmedTrack] = createSignal(-1);
 
   onMount(() => {
     engine = new SampleMapEngine(canvasRef);
     engine.onSampleCount = (n) => setSampleCount(n);
+    engine.onNodeSelect = (node) => {
+      const idx = armedTrack();
+      if (idx < 0) return;
+      if (node) {
+        setSeqSamples((prev) => {
+          const next = [...prev];
+          next[idx] = node;
+          return next;
+        });
+        // Update highlighted set
+        if (engine) {
+          const updated = seqSamples().map((s) => s.id);
+          engine.highlightedNodeIds = new Set(updated);
+        }
+      } else {
+        // Clicked empty space — disarm
+        setArmedTrack(-1);
+      }
+    };
     engine.render();
 
     const handleResize = () => {
@@ -97,6 +136,10 @@ export default function App() {
       const samples = await res.json();
       engine!.loadSamples(samples);
       engine!.start();
+      // Pick sequencer samples once on first load
+      if (seqSamples().length === 0) {
+        setSeqSamples(pickSequencerSamples(engine!.nodes));
+      }
       setLoading(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch samples";
@@ -106,11 +149,19 @@ export default function App() {
   };
 
   const toggleSeq = () => {
-    setSeqActive(!seqActive());
+    const next = !seqActive();
+    setSeqActive(next);
+    // Set/clear dimming on the engine
+    if (engine) {
+      engine.highlightedNodeIds = next
+        ? new Set(seqSamples().map((s) => s.id))
+        : null;
+    }
     // Resize canvas on next frame after DOM updates
     requestAnimationFrame(() => {
       if (engine) {
         engine.resize();
+        if (next) engine.zoomToFit();
         if (!engine.playing) engine.render();
       }
     });
@@ -318,7 +369,45 @@ export default function App() {
 
       {/* Sequencer panel — in normal flow, pushes canvas up */}
       <Show when={seqActive()}>
-        <Sequencer />
+        <Sequencer
+          samples={seqSamples()}
+          onTrigger={(node: SampleNode) => {
+            node.glow = 1;
+            engine?.playSample(node, true);
+          }}
+          onRandomize={() => {
+            if (!engine) return;
+            const count = seqSamples().length;
+            const pool = [...engine.nodes];
+            const next: SampleNode[] = [];
+            for (let i = 0; i < count && pool.length > 0; i++) {
+              const idx = Math.floor(Math.random() * pool.length);
+              next.push(pool.splice(idx, 1)[0]);
+            }
+            setSeqSamples(next);
+            engine.highlightedNodeIds = new Set(next.map((s) => s.id));
+          }}
+          onAddTrack={() => {
+            if (!engine || engine.nodes.length === 0) return;
+            const usedIds = new Set(seqSamples().map((s) => s.id));
+            const available = engine.nodes.filter((n) => !usedIds.has(n.id));
+            const pool = available.length > 0 ? available : engine.nodes;
+            const sample = pool[Math.floor(Math.random() * pool.length)];
+            setSeqSamples((prev) => [...prev, sample]);
+            // Update highlight set
+            engine.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id), sample.id]);
+            // Arm the new track so user can immediately reassign
+            setArmedTrack(seqSamples().length - 1);
+            // Resize canvas since sequencer grew
+            requestAnimationFrame(() => {
+              engine?.resize();
+              if (engine && !engine.playing) engine.render();
+            });
+          }}
+          onFocusSample={(node: SampleNode) => engine?.focusNode(node)}
+          armedTrack={armedTrack()}
+          onArmTrack={setArmedTrack}
+        />
       </Show>
     </div>
   );

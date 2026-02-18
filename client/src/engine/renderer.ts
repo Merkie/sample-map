@@ -53,8 +53,10 @@ export function renderSamples(
   height: number,
   time: number,
   worldToScreen: WorldToScreen,
+  highlightedIds?: Set<string>,
 ): void {
   const radius = SAMPLE_RADIUS * camera.zoom;
+  const dimming = highlightedIds != null && highlightedIds.size > 0;
 
   // Glow pass (additive blending)
   ctx.globalCompositeOperation = "lighter";
@@ -62,10 +64,11 @@ export function renderSamples(
     const [x, y] = worldToScreen(node.x, node.y);
     if (x < -50 || x > width + 50 || y < -50 || y > height + 50) continue;
 
+    const dimFactor = dimming && !highlightedIds.has(node.id) ? 0.35 : 1;
     const [r, g, b] = hexToRgb(node.color);
     const pulse = 0.5 + 0.5 * Math.sin(time * 2 + node.tsneX * 0.05);
     const baseGlow = 0.04 + pulse * 0.03;
-    const glowAlpha = baseGlow + node.glow * 0.25;
+    const glowAlpha = (baseGlow + node.glow * 0.25) * dimFactor;
     const glowWorld = SAMPLE_RADIUS * (2.5 + node.glow * 4);
     const glowSize = glowWorld * Math.min(camera.zoom, 1.2);
 
@@ -76,7 +79,7 @@ export function renderSamples(
 
     if (node.glow > 0.1) {
       const innerGlow = node.glow;
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${innerGlow * 0.35})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${innerGlow * 0.35 * dimFactor})`;
       const innerWorld = SAMPLE_RADIUS * (1.8 + innerGlow * 1.5);
       const innerSize = innerWorld * Math.min(camera.zoom, 1.2);
       ctx.beginPath();
@@ -91,15 +94,16 @@ export function renderSamples(
     const [x, y] = worldToScreen(node.x, node.y);
     if (x < -30 || x > width + 30 || y < -30 || y > height + 30) continue;
 
+    const dimFactor = dimming && !highlightedIds.has(node.id) ? 0.35 : 1;
     const [r, g, b] = hexToRgb(node.color);
 
-    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.85 + node.glow * 0.15})`;
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${(0.85 + node.glow * 0.15) * dimFactor})`;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
 
     // Hot white center
-    const centerAlpha = 0.35 + node.glow * 0.5;
+    const centerAlpha = (0.35 + node.glow * 0.5) * dimFactor;
     ctx.fillStyle = `rgba(255, 255, 255, ${centerAlpha})`;
     ctx.beginPath();
     ctx.arc(x, y, radius * 0.35, 0, Math.PI * 2);

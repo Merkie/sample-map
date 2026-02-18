@@ -1,20 +1,185 @@
-import { createSignal, For } from "solid-js";
+import { createSignal, createEffect, onCleanup, createMemo, For, untrack } from "solid-js";
+import { Dices, Library, Plus } from "lucide-solid";
+import type { SampleNode } from "./engine";
 
 const STEPS = 16;
-const TRACKS = [
+
+// prettier-ignore
+const PRESETS: { name: string; grid: boolean[][] }[] = [
+  {
+    name: "Four on the Floor",
+    grid: [
+      [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
+      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
+      [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
+      [false,false,false,false, false,false,true,false, false,false,false,false, false,false,true,false],
+    ],
+  },
+  {
+    name: "Basic Rock",
+    grid: [
+      [true,false,false,false, false,false,false,false, true,false,true,false, false,false,false,false],
+      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
+      [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
+      [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true],
+    ],
+  },
+  {
+    name: "Hip Hop",
+    grid: [
+      [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false],
+      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,true],
+      [true,false,true,false, true,false,false,true, true,false,true,false, true,false,false,true],
+      [false,false,false,true, false,false,false,false, false,false,false,true, false,false,false,false],
+    ],
+  },
+  {
+    name: "Boom Bap",
+    grid: [
+      [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false],
+      [false,false,false,false, true,false,false,true, false,false,false,false, true,false,false,false],
+      [true,false,true,true, true,false,true,true, true,false,true,true, true,false,true,true],
+      [false,false,false,false, false,true,false,false, false,false,false,false, false,true,false,false],
+    ],
+  },
+  {
+    name: "Trap",
+    grid: [
+      [true,false,false,false, false,false,false,false, true,false,false,true, false,false,false,false],
+      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
+      [true,true,false,true, true,true,false,true, true,true,false,true, true,true,true,true],
+      [false,false,false,false, false,false,true,false, false,false,false,false, true,false,true,false],
+    ],
+  },
+  {
+    name: "Reggaeton",
+    grid: [
+      [true,false,false,true, false,false,true,false, false,false,false,true, false,false,true,false],
+      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
+      [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
+      [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true],
+    ],
+  },
+  {
+    name: "Clear",
+    grid: [
+      Array(STEPS).fill(false),
+      Array(STEPS).fill(false),
+      Array(STEPS).fill(false),
+      Array(STEPS).fill(false),
+    ],
+  },
+];
+const FALLBACK_TRACKS = [
   { name: "Kick", color: "#818cf8" },
   { name: "Snare", color: "#ef4444" },
   { name: "Hat", color: "#eab308" },
   { name: "Perc", color: "#22c55e" },
 ];
 
-export default function Sequencer() {
+interface SequencerProps {
+  samples: SampleNode[];
+  onTrigger?: (node: SampleNode) => void;
+  onRandomize?: () => void;
+  onAddTrack?: () => void;
+  onFocusSample?: (node: SampleNode) => void;
+  armedTrack?: number;
+  onArmTrack?: (index: number) => void;
+}
+
+export default function Sequencer(props: SequencerProps) {
+  const tracks = createMemo(() =>
+    props.samples.length > 0
+      ? props.samples.map((s) => ({ name: s.name, color: s.color }))
+      : FALLBACK_TRACKS,
+  );
   const [grid, setGrid] = createSignal(
-    TRACKS.map(() => Array(STEPS).fill(false) as boolean[]),
+    Array.from({ length: 4 }, () => Array(STEPS).fill(false) as boolean[]),
   );
   const [playing, setPlaying] = createSignal(false);
   const [bpm, setBpm] = createSignal(120);
   const [swing, setSwing] = createSignal(0);
+  const [currentStep, setCurrentStep] = createSignal(-1);
+  const [showPresets, setShowPresets] = createSignal(false);
+
+  const loadPreset = (preset: (typeof PRESETS)[number]) => {
+    const numTracks = tracks().length;
+    const newGrid: boolean[][] = [];
+    for (let i = 0; i < numTracks; i++) {
+      newGrid.push(
+        i < preset.grid.length ? [...preset.grid[i]] : Array(STEPS).fill(false),
+      );
+    }
+    setGrid(newGrid);
+    setShowPresets(false);
+  };
+
+  // Sync grid rows when tracks are added
+  createEffect(() => {
+    const needed = tracks().length;
+    setGrid((prev) => {
+      if (prev.length >= needed) return prev;
+      const next = [...prev];
+      while (next.length < needed) {
+        next.push(Array(STEPS).fill(false) as boolean[]);
+      }
+      return next;
+    });
+  });
+
+  // Scheduler
+  let timerId: ReturnType<typeof setTimeout> | null = null;
+
+  const clearScheduler = () => {
+    if (timerId != null) {
+      clearTimeout(timerId);
+      timerId = null;
+    }
+  };
+
+  createEffect(() => {
+    if (playing()) {
+      let step = 0;
+      setCurrentStep(0);
+
+      const tick = () => {
+        // Read grid/bpm/swing without tracking so they don't re-trigger the effect
+        const g = untrack(grid);
+        const curBpm = untrack(bpm);
+        const curSwing = untrack(swing);
+
+        // Trigger samples for active cells
+        for (let row = 0; row < g.length; row++) {
+          if (g[row][step] && props.samples[row] && props.onTrigger) {
+            props.onTrigger(props.samples[row]);
+          }
+        }
+        setCurrentStep(step);
+
+        // Advance
+        const nextStep = (step + 1) % STEPS;
+        const isOdd = step % 2 === 1;
+
+        // Timing
+        const stepMs = 60000 / curBpm / 4;
+        const swingOffset = stepMs * (curSwing / 100) * 0.33;
+        const delay = isOdd ? stepMs + swingOffset : stepMs - swingOffset;
+
+        step = nextStep;
+        timerId = setTimeout(tick, delay);
+      };
+
+      tick();
+
+      // Clean up if effect re-runs (e.g. playing toggled off then on)
+      onCleanup(clearScheduler);
+    } else {
+      clearScheduler();
+      setCurrentStep(-1);
+    }
+  });
+
+  onCleanup(clearScheduler);
 
   const toggle = (row: number, col: number) => {
     setGrid((prev) => {
@@ -177,6 +342,118 @@ export default function Sequencer() {
             {swing()}%
           </span>
         </div>
+
+        {/* Randomize */}
+        <button
+          onClick={() => props.onRandomize?.()}
+          title="Randomize samples"
+          style={{
+            width: "28px",
+            height: "28px",
+            border: "1px solid rgba(255,255,255,0.12)",
+            "border-radius": "6px",
+            background: "rgba(255,255,255,0.04)",
+            color: "rgba(255,255,255,0.5)",
+            cursor: "pointer",
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            "flex-shrink": "0",
+            transition: "all 0.15s",
+            padding: "0",
+          }}
+        >
+          <Dices size={14} />
+        </button>
+
+        {/* Presets */}
+        <div style={{ position: "relative" }}>
+          <button
+            onClick={() => setShowPresets(!showPresets())}
+            title="Pattern presets"
+            style={{
+              width: "28px",
+              height: "28px",
+              border: "1px solid rgba(255,255,255,0.12)",
+              "border-radius": "6px",
+              background: showPresets()
+                ? "rgba(100,225,225,0.12)"
+                : "rgba(255,255,255,0.04)",
+              color: showPresets()
+                ? "rgba(100,225,225,1)"
+                : "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
+              "flex-shrink": "0",
+              transition: "all 0.15s",
+              padding: "0",
+            }}
+          >
+            <Library size={14} />
+          </button>
+
+          {showPresets() && (
+            <>
+              {/* Backdrop to close on click-outside */}
+              <div
+                onClick={() => setShowPresets(false)}
+                style={{
+                  position: "fixed",
+                  inset: "0",
+                  "z-index": "99",
+                }}
+              />
+              {/* Dropdown */}
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 6px)",
+                  left: "0",
+                  "min-width": "160px",
+                  background: "rgba(20,22,28,0.97)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  "border-radius": "8px",
+                  "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
+                  "backdrop-filter": "blur(16px)",
+                  "-webkit-backdrop-filter": "blur(16px)",
+                  padding: "4px",
+                  "z-index": "100",
+                }}
+              >
+                <For each={PRESETS}>
+                  {(preset) => (
+                    <div
+                      onClick={() => loadPreset(preset)}
+                      style={{
+                        padding: "7px 12px",
+                        "font-size": "0.72rem",
+                        color:
+                          preset.name === "Clear"
+                            ? "rgba(255,255,255,0.35)"
+                            : "rgba(255,255,255,0.75)",
+                        "border-radius": "5px",
+                        cursor: "pointer",
+                        transition: "background 0.1s",
+                        "white-space": "nowrap",
+                      }}
+                      onMouseEnter={(e) =>
+                        (e.currentTarget.style.background =
+                          "rgba(255,255,255,0.08)")
+                      }
+                      onMouseLeave={(e) =>
+                        (e.currentTarget.style.background = "transparent")
+                      }
+                    >
+                      {preset.name}
+                    </div>
+                  )}
+                </For>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Grid */}
@@ -189,23 +466,39 @@ export default function Sequencer() {
           "overflow-x": "auto",
         }}
       >
-        <For each={TRACKS}>
+        <For each={tracks()}>
           {(track, rowIdx) => (
             <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
               {/* Track label */}
               <div
+                onClick={() => {
+                  const idx = rowIdx();
+                  if (props.armedTrack === idx) {
+                    props.onArmTrack?.(-1);
+                  } else {
+                    props.onArmTrack?.(idx);
+                    if (props.samples[idx]) {
+                      props.onFocusSample?.(props.samples[idx]);
+                    }
+                  }
+                }}
                 style={{
-                  width: "44px",
+                  width: "52px",
                   "flex-shrink": "0",
                   "font-size": "0.62rem",
                   "font-weight": "600",
                   "letter-spacing": "0.05em",
                   "text-transform": "uppercase",
-                  color: track.color,
-                  opacity: "0.7",
-                  "text-align": "right",
-                  "padding-right": "4px",
+                  color: props.armedTrack === rowIdx() ? "#ffffff" : track.color,
+                  opacity: props.armedTrack === rowIdx() ? "1" : "0.7",
+                  "text-align": "left",
+                  overflow: "hidden",
+                  "text-overflow": "ellipsis",
+                  "white-space": "nowrap",
+                  cursor: "pointer",
+                  transition: "color 0.15s, opacity 0.15s",
                 }}
+                title={props.armedTrack === rowIdx() ? "Click a sample on the map..." : track.name}
               >
                 {track.name}
               </div>
@@ -215,6 +508,7 @@ export default function Sequencer() {
                 <For each={grid()[rowIdx()]}>
                   {(active, colIdx) => {
                     const isOddGroup = () => Math.floor(colIdx() / 4) % 2 === 1;
+                    const isPlayhead = () => currentStep() === colIdx();
                     return (
                       <div
                         onClick={() => toggle(rowIdx(), colIdx())}
@@ -229,12 +523,15 @@ export default function Sequencer() {
                             : isOddGroup()
                               ? "rgba(255,255,255,0.03)"
                               : "rgba(255,255,255,0.055)",
-                          opacity: active ? "1" : "1",
                           cursor: "pointer",
                           transition: "background 0.1s, box-shadow 0.1s",
-                          "box-shadow": active
-                            ? `0 0 8px ${track.color}44, inset 0 1px 0 rgba(255,255,255,0.15)`
-                            : "inset 0 1px 0 rgba(255,255,255,0.03)",
+                          "box-shadow": isPlayhead()
+                            ? active
+                              ? `0 0 12px ${track.color}88, inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1.5px rgba(255,255,255,0.5)`
+                              : "inset 0 0 0 1.5px rgba(255,255,255,0.3), inset 0 1px 0 rgba(255,255,255,0.03)"
+                            : active
+                              ? `0 0 8px ${track.color}44, inset 0 1px 0 rgba(255,255,255,0.15)`
+                              : "inset 0 1px 0 rgba(255,255,255,0.03)",
                           overflow: "hidden",
                           "margin-left": "0",
                         }}
@@ -254,6 +551,20 @@ export default function Sequencer() {
                               : "rgba(255,255,255,0.04)",
                           }}
                         />
+                        {/* Playhead overlay */}
+                        {isPlayhead() && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              inset: "0",
+                              "border-radius": "5px",
+                              background: active
+                                ? "rgba(255,255,255,0.12)"
+                                : "rgba(255,255,255,0.06)",
+                              "pointer-events": "none",
+                            }}
+                          />
+                        )}
                       </div>
                     );
                   }}
@@ -262,6 +573,25 @@ export default function Sequencer() {
             </div>
           )}
         </For>
+
+        {/* Add track button */}
+        <div
+          onClick={() => props.onAddTrack?.()}
+          style={{
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            height: "28px",
+            "margin-top": "2px",
+            "border-radius": "5px",
+            border: "1px dashed rgba(255,255,255,0.08)",
+            color: "rgba(255,255,255,0.25)",
+            cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+        >
+          <Plus size={14} />
+        </div>
       </div>
     </div>
   );
