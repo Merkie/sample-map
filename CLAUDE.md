@@ -10,6 +10,7 @@ sample-map/
     index.ts               # Bun.serve() on port 3720 (API + static files)
     extract.py             # Python: librosa features + t-SNE → JSON
   client/src/              # SolidJS + Canvas 2D (Vite for dev)
+    state.ts               # Global singleton state (signals for engine, UI, sequencer)
     App.tsx                # Full-viewport canvas + sequencer overlay
     Sequencer.tsx          # Drum sequencer UI (FL Studio-style step grid)
     engine/
@@ -29,6 +30,24 @@ bun install
 bun run dev      # dev with HMR → http://localhost:3721
 bun run start    # production build → http://localhost:3720
 ```
+
+## SolidJS Rules
+
+- **All singleton/global state lives in `client/src/state.ts`** — never create component-local signals for app-wide state
+- **Never prop-drill singleton state** — import signals directly from `state.ts` instead of passing through props
+- **Props are for per-instance configuration only** — if there's only one source of truth, it belongs in `state.ts`
+- **Never destructure props** in SolidJS — it breaks reactivity. Access via `props.x`
+- **Components should have zero props when all their data is global** — e.g. `<Sequencer />` takes no props
+
+### State file (`client/src/state.ts`)
+
+Contains all global signals:
+- `engine` — SampleMapEngine singleton instance
+- `loading`, `error` — app loading/error state
+- `sampleCount` — number of loaded samples
+- `seqActive` — sequencer panel open/closed
+- `seqSamples` — samples assigned to sequencer tracks
+- `armedTrack` — which track is armed for sample replacement
 
 ## Key Details
 

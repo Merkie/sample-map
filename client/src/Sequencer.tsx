@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, untrack } from "solid-js";
 import { Dices, Library, Plus } from "lucide-solid";
 import type { SampleNode } from "./engine";
+import { engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack } from "./state";
 
 const STEPS = 16;
 
@@ -77,20 +78,10 @@ const FALLBACK_TRACKS = [
   { name: "Perc", color: "#22c55e" },
 ];
 
-interface SequencerProps {
-  samples: SampleNode[];
-  onTrigger?: (node: SampleNode) => void;
-  onRandomize?: () => void;
-  onAddTrack?: () => void;
-  onFocusSample?: (node: SampleNode) => void;
-  armedTrack?: number;
-  onArmTrack?: (index: number) => void;
-}
-
-export default function Sequencer(props: SequencerProps) {
+export default function Sequencer() {
   const tracks = createMemo(() =>
-    props.samples.length > 0
-      ? props.samples.map((s) => ({ name: s.name, color: s.color }))
+    seqSamples().length > 0
+      ? seqSamples().map((s) => ({ name: s.name, color: s.color }))
       : FALLBACK_TRACKS,
   );
   const [grid, setGrid] = createSignal(
@@ -149,9 +140,11 @@ export default function Sequencer(props: SequencerProps) {
         const curSwing = untrack(swing);
 
         // Trigger samples for active cells
+        const samples = untrack(seqSamples);
         for (let row = 0; row < g.length; row++) {
-          if (g[row][step] && props.samples[row] && props.onTrigger) {
-            props.onTrigger(props.samples[row]);
+          if (g[row][step] && samples[row]) {
+            samples[row].glow = 1;
+            engine()?.playSample(samples[row], true);
           }
         }
         setCurrentStep(step);
@@ -345,7 +338,19 @@ export default function Sequencer(props: SequencerProps) {
 
         {/* Randomize */}
         <button
-          onClick={() => props.onRandomize?.()}
+          onClick={() => {
+            const eng = engine();
+            if (!eng) return;
+            const count = seqSamples().length;
+            const pool = [...eng.nodes];
+            const next: SampleNode[] = [];
+            for (let i = 0; i < count && pool.length > 0; i++) {
+              const idx = Math.floor(Math.random() * pool.length);
+              next.push(pool.splice(idx, 1)[0]);
+            }
+            setSeqSamples(next);
+            eng.highlightedNodeIds = new Set(next.map((s) => s.id));
+          }}
           title="Randomize samples"
           style={{
             width: "28px",
@@ -473,12 +478,13 @@ export default function Sequencer(props: SequencerProps) {
               <div
                 onClick={() => {
                   const idx = rowIdx();
-                  if (props.armedTrack === idx) {
-                    props.onArmTrack?.(-1);
+                  if (armedTrack() === idx) {
+                    setArmedTrack(-1);
                   } else {
-                    props.onArmTrack?.(idx);
-                    if (props.samples[idx]) {
-                      props.onFocusSample?.(props.samples[idx]);
+                    setArmedTrack(idx);
+                    const samples = seqSamples();
+                    if (samples[idx]) {
+                      engine()?.focusNode(samples[idx]);
                     }
                   }
                 }}
@@ -489,8 +495,8 @@ export default function Sequencer(props: SequencerProps) {
                   "font-weight": "600",
                   "letter-spacing": "0.05em",
                   "text-transform": "uppercase",
-                  color: props.armedTrack === rowIdx() ? "#ffffff" : track.color,
-                  opacity: props.armedTrack === rowIdx() ? "1" : "0.7",
+                  color: armedTrack() === rowIdx() ? "#ffffff" : track.color,
+                  opacity: armedTrack() === rowIdx() ? "1" : "0.7",
                   "text-align": "left",
                   overflow: "hidden",
                   "text-overflow": "ellipsis",
@@ -498,7 +504,7 @@ export default function Sequencer(props: SequencerProps) {
                   cursor: "pointer",
                   transition: "color 0.15s, opacity 0.15s",
                 }}
-                title={props.armedTrack === rowIdx() ? "Click a sample on the map..." : track.name}
+                title={armedTrack() === rowIdx() ? "Click a sample on the map..." : track.name}
               >
                 {track.name}
               </div>
@@ -576,7 +582,17 @@ export default function Sequencer(props: SequencerProps) {
 
         {/* Add track button */}
         <div
-          onClick={() => props.onAddTrack?.()}
+          onClick={() => {
+            const eng = engine();
+            if (!eng || eng.nodes.length === 0) return;
+            const usedIds = new Set(seqSamples().map((s) => s.id));
+            const available = eng.nodes.filter((n) => !usedIds.has(n.id));
+            const pool = available.length > 0 ? available : eng.nodes;
+            const sample = pool[Math.floor(Math.random() * pool.length)];
+            setSeqSamples((prev) => [...prev, sample]);
+            eng.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id), sample.id]);
+            setArmedTrack(seqSamples().length - 1);
+          }}
           style={{
             display: "flex",
             "align-items": "center",

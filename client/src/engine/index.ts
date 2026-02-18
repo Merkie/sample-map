@@ -5,7 +5,7 @@ import type { SampleNode } from "./types";
 import type { Camera } from "./camera";
 import { updateFreeCamera } from "./camera";
 import { createSimulation, preSettle, tickSimulation, syncFromSimulation, stopSimulation } from "./physics";
-import { renderStars, renderSamples, renderSelectionRing, renderHUD } from "./renderer";
+import { renderStars, renderSamples, renderSequencerPolygon, renderSelectionRing, renderHUD } from "./renderer";
 import { createSelectionRing, selectNode, dismissRing, updateSelectionRing } from "./selection-ring";
 import {
   TSNE_SCALE,
@@ -92,6 +92,11 @@ export class SampleMapEngine {
 
   // Sequencer dimming: when set, only these nodes render at full brightness
   highlightedNodeIds: Set<string> | null = null;
+
+  // Animated polygon vertices (world space, lerped toward target nodes)
+  private polygonVertices: Array<{ x: number; y: number }> = [];
+  private polygonTargetIds: string[] = [];
+  private static readonly POLYGON_LERP_SPEED = 18; // per-second exponential decay rate
 
   // Margins in screen pixels (e.g. for header/sequencer overlays)
   topMargin = 0;
@@ -244,6 +249,8 @@ export class SampleMapEngine {
     this.zoomVelocity = 0;
     this.dragging = false;
     this.followTarget = null;
+    this.polygonVertices = [];
+    this.polygonTargetIds = [];
   }
 
   private stopAllAudio() {
@@ -432,6 +439,9 @@ export class SampleMapEngine {
     // Selection ring spring physics
     updateSelectionRing(this.selectionRing, dt);
 
+    // Animate polygon vertices toward sequencer nodes
+    this.updatePolygonVertices(dt);
+
     this.updateCamera();
     this.render();
 
@@ -556,6 +566,80 @@ export class SampleMapEngine {
     };
 
     this.audioPlaying.set(playId, { source, gain });
+  }
+
+  // ===== Polygon Animation =====
+
+  private updatePolygonVertices(dt: number) {
+    const ids = this.highlightedNodeIds;
+    if (!ids || ids.size < 2) {
+      this.polygonVertices = [];
+      this.polygonTargetIds = [];
+      return;
+    }
+
+    // Build target list from highlighted nodes
+    const targets: SampleNode[] = [];
+    for (const node of this.nodes) {
+      if (ids.has(node.id)) targets.push(node);
+    }
+    if (targets.length < 2) {
+      this.polygonVertices = [];
+      this.polygonTargetIds = [];
+      return;
+    }
+
+    const wasEmpty = this.polygonVertices.length === 0;
+
+    // First time — snap directly to node positions, no animation
+    if (wasEmpty) {
+      this.polygonVertices = targets.map(n => ({ x: n.x, y: n.y }));
+      this.polygonTargetIds = targets.map(n => n.id);
+      return;
+    }
+
+    // Build lookup of current animated positions by node ID
+    const currentPosById = new Map<string, { x: number; y: number }>();
+    for (let i = 0; i < this.polygonTargetIds.length; i++) {
+      const v = this.polygonVertices[i];
+      if (v) currentPosById.set(this.polygonTargetIds[i], v);
+    }
+
+    // Collect positions of disappeared nodes (swapped out)
+    const newIdSet = new Set(targets.map(n => n.id));
+    const disappeared: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < this.polygonTargetIds.length; i++) {
+      if (!newIdSet.has(this.polygonTargetIds[i])) {
+        disappeared.push({ ...this.polygonVertices[i] });
+      }
+    }
+
+    // Match animated vertices to target nodes
+    const newVertices: Array<{ x: number; y: number }> = [];
+    const newIds: string[] = [];
+    const t = 1 - Math.exp(-SampleMapEngine.POLYGON_LERP_SPEED * dt);
+
+    for (const node of targets) {
+      const existing = currentPosById.get(node.id);
+      if (existing) {
+        // Known node — lerp toward its current position
+        newVertices.push({
+          x: existing.x + (node.x - existing.x) * t,
+          y: existing.y + (node.y - existing.y) * t,
+        });
+      } else {
+        // New node (sample was swapped in) — start from a disappeared vertex's position
+        const start = disappeared.shift() ?? { x: node.x, y: node.y };
+        newVertices.push({
+          x: start.x + (node.x - start.x) * t,
+          y: start.y + (node.y - start.y) * t,
+        });
+      }
+      newIds.push(node.id);
+    }
+
+    this.polygonVertices = newVertices;
+    this.polygonTargetIds = newIds;
   }
 
   // ===== Camera =====
@@ -725,6 +809,7 @@ export class SampleMapEngine {
     const wts = this.worldToScreen.bind(this);
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
     renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts, this.highlightedNodeIds ?? undefined);
+    renderSequencerPolygon(ctx, this.polygonVertices, wts);
     renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
     renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode, this.selectionRing.node);
 

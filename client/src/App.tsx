@@ -1,7 +1,16 @@
-import { createSignal, onMount, onCleanup, Show } from "solid-js";
+import { onMount, onCleanup, Show } from "solid-js";
 import { SampleMapEngine } from "./engine";
 import type { SampleNode } from "./engine";
 import Sequencer from "./Sequencer";
+import {
+  engine, setEngine,
+  loading, setLoading,
+  error, setError,
+  setSampleCount,
+  seqActive, setSeqActive,
+  seqSamples, setSeqSamples,
+  armedTrack, setArmedTrack,
+} from "./state";
 
 
 const HEADER_HEIGHT = 30;
@@ -26,21 +35,14 @@ function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
 export default function App() {
   let canvasRef!: HTMLCanvasElement;
   let seqRef!: HTMLDivElement;
-  let engine: SampleMapEngine | null = null;
   let seqHeight = 0;
 
-  const [loading, setLoading] = createSignal(true);
-  const [error, setError] = createSignal<string | null>(null);
-  const [sampleCount, setSampleCount] = createSignal(0);
-  const [seqActive, setSeqActive] = createSignal(false);
-  const [seqSamples, setSeqSamples] = createSignal<SampleNode[]>([]);
-  const [armedTrack, setArmedTrack] = createSignal(-1);
-
   onMount(() => {
-    engine = new SampleMapEngine(canvasRef);
-    engine.topMargin = HEADER_HEIGHT;
-    engine.onSampleCount = (n) => setSampleCount(n);
-    engine.onNodeSelect = (node) => {
+    const e = new SampleMapEngine(canvasRef);
+    setEngine(e);
+    e.topMargin = HEADER_HEIGHT;
+    e.onSampleCount = (n) => setSampleCount(n);
+    e.onNodeSelect = (node) => {
       const idx = armedTrack();
       if (idx < 0) return;
       if (node) {
@@ -50,21 +52,20 @@ export default function App() {
           return next;
         });
         // Update highlighted set
-        if (engine) {
-          const updated = seqSamples().map((s) => s.id);
-          engine.highlightedNodeIds = new Set(updated);
-        }
+        const updated = seqSamples().map((s) => s.id);
+        e.highlightedNodeIds = new Set(updated);
       } else {
         // Clicked empty space — disarm
         setArmedTrack(-1);
       }
     };
-    engine.render();
+    e.render();
 
     const handleResize = () => {
-      if (engine) {
-        engine.resize();
-        if (!engine.playing) engine.render();
+      const eng = engine();
+      if (eng) {
+        eng.resize();
+        if (!eng.playing) eng.render();
       }
     };
     const heldArrows = new Set<string>();
@@ -79,12 +80,12 @@ export default function App() {
     const fireArrow = (key: string) => {
       if (heldArrows.has(opposingKey[key])) return;
       const dir = key.replace("Arrow", "").toLowerCase() as "up" | "down" | "left" | "right";
-      engine?.onArrowKey(dir);
+      engine()?.onArrowKey(dir);
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        engine?.onEscape();
+        engine()?.onEscape();
         return;
       }
       if (e.key in opposingKey) {
@@ -119,9 +120,10 @@ export default function App() {
     // Track sequencer height via ResizeObserver
     const seqObserver = new ResizeObserver(() => {
       seqHeight = seqRef.offsetHeight;
-      if (engine && seqActive()) {
-        engine.bottomMargin = seqHeight;
-        engine.zoomToFit();
+      const eng = engine();
+      if (eng && seqActive()) {
+        eng.bottomMargin = seqHeight;
+        eng.zoomToFit();
       }
     });
     seqObserver.observe(seqRef);
@@ -134,7 +136,7 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       seqObserver.disconnect();
-      engine?.stop();
+      engine()?.stop();
     });
   });
 
@@ -148,12 +150,13 @@ export default function App() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       const samples = await res.json();
-      engine!.loadSamples(samples);
-      engine!.zoomToFit();
-      engine!.start();
+      const eng = engine()!;
+      eng.loadSamples(samples);
+      eng.zoomToFit();
+      eng.start();
       // Pick sequencer samples once on first load
       if (seqSamples().length === 0) {
-        setSeqSamples(pickSequencerSamples(engine!.nodes));
+        setSeqSamples(pickSequencerSamples(eng.nodes));
       }
       setLoading(false);
     } catch (err) {
@@ -166,12 +169,13 @@ export default function App() {
   const toggleSeq = () => {
     const next = !seqActive();
     setSeqActive(next);
-    if (engine) {
-      engine.highlightedNodeIds = next
+    const eng = engine();
+    if (eng) {
+      eng.highlightedNodeIds = next
         ? new Set(seqSamples().map((s) => s.id))
         : null;
-      engine.bottomMargin = next ? seqHeight : 0;
-      engine.zoomToFit();
+      eng.bottomMargin = next ? seqHeight : 0;
+      eng.zoomToFit();
     }
   };
 
@@ -197,18 +201,18 @@ export default function App() {
           cursor: "grab",
         }}
         onMouseDown={(e) => {
-          engine?.onPointerDown(e.clientX, e.clientY);
+          engine()?.onPointerDown(e.clientX, e.clientY);
           e.currentTarget.style.cursor = "grabbing";
         }}
-        onMouseMove={(e) => engine?.onPointerMove(e.clientX, e.clientY)}
+        onMouseMove={(e) => engine()?.onPointerMove(e.clientX, e.clientY)}
         onMouseUp={(e) => {
-          engine?.onPointerUp(e.clientX, e.clientY);
+          engine()?.onPointerUp(e.clientX, e.clientY);
           e.currentTarget.style.cursor = "grab";
         }}
-        onMouseLeave={() => engine?.onPointerLeave()}
+        onMouseLeave={() => engine()?.onPointerLeave()}
         onWheel={(e) => {
           e.preventDefault();
-          engine?.onWheel(e.deltaY, e.clientX, e.clientY);
+          engine()?.onWheel(e.deltaY, e.clientX, e.clientY);
         }}
       />
 
@@ -380,40 +384,7 @@ export default function App() {
           transition: "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       >
-        <Sequencer
-          samples={seqSamples()}
-          onTrigger={(node: SampleNode) => {
-            node.glow = 1;
-            engine?.playSample(node, true);
-          }}
-          onRandomize={() => {
-            if (!engine) return;
-            const count = seqSamples().length;
-            const pool = [...engine.nodes];
-            const next: SampleNode[] = [];
-            for (let i = 0; i < count && pool.length > 0; i++) {
-              const idx = Math.floor(Math.random() * pool.length);
-              next.push(pool.splice(idx, 1)[0]);
-            }
-            setSeqSamples(next);
-            engine.highlightedNodeIds = new Set(next.map((s) => s.id));
-          }}
-          onAddTrack={() => {
-            if (!engine || engine.nodes.length === 0) return;
-            const usedIds = new Set(seqSamples().map((s) => s.id));
-            const available = engine.nodes.filter((n) => !usedIds.has(n.id));
-            const pool = available.length > 0 ? available : engine.nodes;
-            const sample = pool[Math.floor(Math.random() * pool.length)];
-            setSeqSamples((prev) => [...prev, sample]);
-            // Update highlight set
-            engine.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id), sample.id]);
-            // Arm the new track so user can immediately reassign
-            setArmedTrack(seqSamples().length - 1);
-          }}
-          onFocusSample={(node: SampleNode) => engine?.focusNode(node)}
-          armedTrack={armedTrack()}
-          onArmTrack={setArmedTrack}
-        />
+        <Sequencer />
       </div>
     </div>
   );

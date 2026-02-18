@@ -113,6 +113,40 @@ export function renderSamples(
   }
 }
 
+export function renderSequencerPolygon(
+  ctx: CanvasRenderingContext2D,
+  vertices: Array<{ x: number; y: number }>,
+  worldToScreen: WorldToScreen,
+): void {
+  if (vertices.length < 2) return;
+
+  // Sort by angle from centroid for non-self-intersecting polygon
+  let cx = 0, cy = 0;
+  for (const v of vertices) { cx += v.x; cy += v.y; }
+  cx /= vertices.length;
+  cy /= vertices.length;
+
+  const sorted = [...vertices].sort((a, b) =>
+    Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx)
+  );
+
+  const pts = sorted.map(v => worldToScreen(v.x, v.y));
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = "rgba(255, 255, 255, 0.2)";
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) {
+    ctx.lineTo(pts[i][0], pts[i][1]);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function renderSelectionRing(
   ctx: CanvasRenderingContext2D,
   ring: SelectionRingState,

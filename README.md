@@ -30,6 +30,10 @@ All routes are under `/api`:
 - `GET /api/samples/refresh` — bust cache, re-run extraction
 - `GET /api/audio/{path}` — serve audio files from `samples/`
 
+## State Management
+
+All singleton/global state lives in `client/src/state.ts` as SolidJS signals — no prop drilling, no context providers. Components import signals directly. See `CLAUDE.md` for rules.
+
 ## Sequencer
 
 Click **seq** in the header to open the drum sequencer — it slides up from the bottom while the star map smoothly zooms out and pans up to make room. 16-step grid with 4 tracks: Kick, Snare, Hat, Perc. Includes transport controls (play/stop, BPM, swing). UI only for now — audio scheduling coming soon.
