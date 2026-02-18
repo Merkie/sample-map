@@ -1,6 +1,9 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { SampleMapEngine } from "./engine";
+import Sequencer from "./Sequencer";
 
+
+const HEADER_HEIGHT = 30;
 
 export default function App() {
   let canvasRef!: HTMLCanvasElement;
@@ -9,6 +12,7 @@ export default function App() {
   const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [sampleCount, setSampleCount] = createSignal(0);
+  const [seqActive, setSeqActive] = createSignal(false);
 
   onMount(() => {
     engine = new SampleMapEngine(canvasRef);
@@ -101,131 +105,220 @@ export default function App() {
     }
   };
 
+  const toggleSeq = () => {
+    setSeqActive(!seqActive());
+    // Resize canvas on next frame after DOM updates
+    requestAnimationFrame(() => {
+      if (engine) {
+        engine.resize();
+        if (!engine.playing) engine.render();
+      }
+    });
+  };
+
   return (
     <div
       style={{
         width: "100vw",
         height: "100vh",
-        position: "relative",
+        display: "flex",
+        "flex-direction": "column",
         overflow: "hidden",
         background: "#000408",
       }}
     >
-      <canvas
-        ref={canvasRef}
+      {/* Canvas area — grows to fill remaining space */}
+      <div
         style={{
-          display: "block",
-          width: "100%",
-          height: "100%",
-          cursor: "grab",
+          flex: "1",
+          "min-height": "0",
+          position: "relative",
+          overflow: "hidden",
         }}
-        onMouseDown={(e) => {
-          engine?.onPointerDown(e.clientX, e.clientY);
-          e.currentTarget.style.cursor = "grabbing";
-        }}
-        onMouseMove={(e) => engine?.onPointerMove(e.clientX, e.clientY)}
-        onMouseUp={(e) => {
-          engine?.onPointerUp(e.clientX, e.clientY);
-          e.currentTarget.style.cursor = "grab";
-        }}
-        onMouseLeave={() => engine?.onPointerLeave()}
-        onWheel={(e) => {
-          e.preventDefault();
-          engine?.onWheel(e.deltaY, e.clientX, e.clientY);
-        }}
-      />
-
-      {/* Loading overlay */}
-      <Show when={loading()}>
+      >
+        {/* Header — absolute overlay within canvas area */}
         <div
           style={{
             position: "absolute",
-            inset: "0",
+            top: "0",
+            left: "0",
+            right: "0",
+            height: `${HEADER_HEIGHT}px`,
             display: "flex",
-            "flex-direction": "column",
             "align-items": "center",
-            "justify-content": "center",
-            background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
-            "z-index": "10",
+            background: "linear-gradient(180deg, rgba(12,14,18,0.92) 0%, rgba(8,10,14,0.88) 100%)",
+            "border-bottom": "1px solid rgba(255,255,255,0.06)",
+            "box-shadow": "0 1px 8px rgba(0,0,0,0.5), inset 0 -1px 0 rgba(255,255,255,0.03)",
+            "backdrop-filter": "blur(12px)",
+            "-webkit-backdrop-filter": "blur(12px)",
+            padding: "0 12px",
+            "z-index": "20",
+            gap: "12px",
+            "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            "user-select": "none",
           }}
         >
-          <h1
+          <span
             style={{
-              "font-size": "2.5rem",
-              "font-weight": "200",
-              "letter-spacing": "0.2em",
-              color: "rgba(255,255,255,0.85)",
-              margin: "0 0 4px 0",
-              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              "font-size": "0.74rem",
+              "font-weight": "600",
+              "letter-spacing": "0.03em",
+              color: "rgba(255,255,255,0.55)",
             }}
           >
-            SAMPLE MAP
-          </h1>
-          <p
-            style={{
-              color: "rgba(255,255,255,0.4)",
-              "font-family": "monospace",
-              "font-size": "0.8rem",
-            }}
-          >
-            Extracting features &amp; computing t-SNE...
-          </p>
-        </div>
-      </Show>
+            SampleMap
+          </span>
 
-      {/* Error overlay */}
-      <Show when={error()}>
-        <div
-          style={{
-            position: "absolute",
-            inset: "0",
-            display: "flex",
-            "flex-direction": "column",
-            "align-items": "center",
-            "justify-content": "center",
-            background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
-            "z-index": "10",
-          }}
-        >
-          <h1
-            style={{
-              "font-size": "2.5rem",
-              "font-weight": "200",
-              "letter-spacing": "0.2em",
-              color: "rgba(255,255,255,0.85)",
-              margin: "0 0 4px 0",
-              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-            }}
-          >
-            SAMPLE MAP
-          </h1>
-          <p
-            style={{
-              color: "rgba(239,68,68,0.8)",
-              "font-family": "monospace",
-              "font-size": "0.85rem",
-              margin: "0 0 20px 0",
-            }}
-          >
-            {error()}
-          </p>
+          {/* Separator */}
+          <div style={{ width: "1px", height: "12px", background: "rgba(255,255,255,0.08)" }} />
+
           <button
-            onClick={fetchSamples}
+            onClick={toggleSeq}
             style={{
               background: "none",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: "rgba(255,255,255,0.5)",
-              padding: "8px 24px",
-              "font-size": "0.75rem",
-              "font-family": "monospace",
+              border: "none",
+              padding: "0 6px",
+              height: `${HEADER_HEIGHT}px`,
+              "font-size": "0.66rem",
+              "font-weight": "500",
+              "letter-spacing": "0.08em",
+              "text-transform": "uppercase",
+              color: seqActive() ? "rgba(100,225,225,1)" : "rgba(255,255,255,0.5)",
               cursor: "pointer",
-              "border-radius": "3px",
-              "letter-spacing": "0.1em",
+              "font-family": "inherit",
+              "border-bottom": seqActive() ? "2px solid rgba(100,225,225,0.9)" : "2px solid transparent",
+              "box-shadow": "none",
+              transition: "color 0.2s, border-color 0.2s",
+              "margin-bottom": "-1px",
+              outline: "none",
+              "-webkit-tap-highlight-color": "transparent",
             }}
           >
-            RETRY
+            seq
           </button>
         </div>
+
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: "block",
+            width: "100%",
+            height: "100%",
+            cursor: "grab",
+          }}
+          onMouseDown={(e) => {
+            engine?.onPointerDown(e.clientX, e.clientY);
+            e.currentTarget.style.cursor = "grabbing";
+          }}
+          onMouseMove={(e) => engine?.onPointerMove(e.clientX, e.clientY)}
+          onMouseUp={(e) => {
+            engine?.onPointerUp(e.clientX, e.clientY);
+            e.currentTarget.style.cursor = "grab";
+          }}
+          onMouseLeave={() => engine?.onPointerLeave()}
+          onWheel={(e) => {
+            e.preventDefault();
+            engine?.onWheel(e.deltaY, e.clientX, e.clientY);
+          }}
+        />
+
+        {/* Loading overlay */}
+        <Show when={loading()}>
+          <div
+            style={{
+              position: "absolute",
+              inset: "0",
+              display: "flex",
+              "flex-direction": "column",
+              "align-items": "center",
+              "justify-content": "center",
+              background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
+              "z-index": "10",
+            }}
+          >
+            <h1
+              style={{
+                "font-size": "2.5rem",
+                "font-weight": "200",
+                "letter-spacing": "0.2em",
+                color: "rgba(255,255,255,0.85)",
+                margin: "0 0 4px 0",
+                "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              }}
+            >
+              SAMPLE MAP
+            </h1>
+            <p
+              style={{
+                color: "rgba(255,255,255,0.4)",
+                "font-family": "monospace",
+                "font-size": "0.8rem",
+              }}
+            >
+              Extracting features &amp; computing t-SNE...
+            </p>
+          </div>
+        </Show>
+
+        {/* Error overlay */}
+        <Show when={error()}>
+          <div
+            style={{
+              position: "absolute",
+              inset: "0",
+              display: "flex",
+              "flex-direction": "column",
+              "align-items": "center",
+              "justify-content": "center",
+              background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
+              "z-index": "10",
+            }}
+          >
+            <h1
+              style={{
+                "font-size": "2.5rem",
+                "font-weight": "200",
+                "letter-spacing": "0.2em",
+                color: "rgba(255,255,255,0.85)",
+                margin: "0 0 4px 0",
+                "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              }}
+            >
+              SAMPLE MAP
+            </h1>
+            <p
+              style={{
+                color: "rgba(239,68,68,0.8)",
+                "font-family": "monospace",
+                "font-size": "0.85rem",
+                margin: "0 0 20px 0",
+              }}
+            >
+              {error()}
+            </p>
+            <button
+              onClick={fetchSamples}
+              style={{
+                background: "none",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "rgba(255,255,255,0.5)",
+                padding: "8px 24px",
+                "font-size": "0.75rem",
+                "font-family": "monospace",
+                cursor: "pointer",
+                "border-radius": "3px",
+                "letter-spacing": "0.1em",
+              }}
+            >
+              RETRY
+            </button>
+          </div>
+        </Show>
+      </div>
+
+      {/* Sequencer panel — in normal flow, pushes canvas up */}
+      <Show when={seqActive()}>
+        <Sequencer />
       </Show>
     </div>
   );

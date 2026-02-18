@@ -2,7 +2,7 @@ import type { SampleNode } from "./types";
 import type { Camera } from "./camera";
 import type { SelectionRingState } from "./selection-ring";
 import { hexToRgb } from "./utils";
-import { SAMPLE_RADIUS, HUD_TITLE, RING_VERTEX_COUNT } from "./constants";
+import { SAMPLE_RADIUS, RING_VERTEX_COUNT } from "./constants";
 
 type Star = { x: number; y: number; b: number; s: number; d: number };
 type WorldToScreen = (wx: number, wy: number) => [number, number];
@@ -170,12 +170,6 @@ export function renderHUD(
   hoveredNode: SampleNode | null,
   selectedNode: SampleNode | null,
 ): void {
-  // Title (top left)
-  ctx.textAlign = "left";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-  ctx.font = "11px monospace";
-  ctx.fillText(HUD_TITLE, 24, 24);
-
   // Sample count (bottom right)
   ctx.textAlign = "right";
   ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
