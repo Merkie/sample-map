@@ -5,5 +5,8 @@ export default defineConfig({
   plugins: [solid()],
   server: {
     port: 3721,
+    proxy: {
+      "/api": "http://localhost:3720",
+    },
   },
 });

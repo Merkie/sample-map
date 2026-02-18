@@ -1,7 +1,6 @@
 import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { SampleMapEngine } from "./engine";
 
-const API_URL = "http://localhost:3720";
 
 export default function App() {
   let canvasRef!: HTMLCanvasElement;
@@ -37,7 +36,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_URL}/api/samples`);
+      const res = await fetch("/api/samples");
       if (!res.ok) {
         const data = await res.json().catch(() => ({ error: "Server error" }));
         throw new Error(data.error || `HTTP ${res.status}`);

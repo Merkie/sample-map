@@ -321,7 +321,7 @@ export class SampleMapEngine {
 
   private async playSample(node: SampleNode) {
     const ctx = this.ensureAudioCtx();
-    const url = `http://localhost:3720/audio/${encodeURIComponent(node.relativePath)}`;
+    const url = `/api/audio/${encodeURIComponent(node.relativePath)}`;
 
     let buffer = this.audioCache.get(node.id);
     if (!buffer) {

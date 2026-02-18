@@ -2,5 +2,9 @@
   "name": "sample-map",
   "version": "2.0.0",
   "private": true,
-  "workspaces": ["server", "client"]
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "dev": "bun server/index.ts & cd client && bun run dev",
+    "start": "cd client && bun run build && cd .. && bun server/index.ts"
+  }
 }

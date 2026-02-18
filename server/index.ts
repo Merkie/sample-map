@@ -6,6 +6,7 @@ const PYTHON = resolve(ROOT, "venv", "bin", "python3");
 const EXTRACT_PY = resolve(ROOT, "server", "extract.py");
 const SAMPLES_DIR = resolve(ROOT, "samples");
 const CACHE_FILE = resolve(ROOT, ".sample-map-cache.json");
+const CLIENT_DIST = resolve(ROOT, "client", "dist");
 
 let cachedSamples: unknown[] | null = null;
 
@@ -48,21 +49,13 @@ async function loadOrExtract(): Promise<unknown[]> {
   return cachedSamples!;
 }
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "http://localhost:3721",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Range",
-};
-
 Bun.serve({
   port: 3720,
   idleTimeout: 255,
   async fetch(req) {
     const url = new URL(req.url);
 
-    if (req.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
-    }
+    // --- API routes ---
 
     // Serve sample data
     if (url.pathname === "/api/samples" && req.method === "GET") {
@@ -87,10 +80,10 @@ Bun.serve({
           });
         }
 
-        return Response.json(samples, { headers: CORS_HEADERS });
+        return Response.json(samples);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500, headers: CORS_HEADERS });
+        return Response.json({ error: message }, { status: 500 });
       }
     }
 
@@ -102,26 +95,26 @@ Bun.serve({
       } catch { /* ignore */ }
       try {
         const samples = await loadOrExtract();
-        return Response.json(samples, { headers: CORS_HEADERS });
+        return Response.json(samples);
       } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500, headers: CORS_HEADERS });
+        return Response.json({ error: message }, { status: 500 });
       }
     }
 
-    // Serve audio files: /audio/path/to/sample.wav
-    if (url.pathname.startsWith("/audio/") && req.method === "GET") {
-      const relPath = decodeURIComponent(url.pathname.slice("/audio/".length));
+    // Serve audio files: /api/audio/path/to/sample.wav
+    if (url.pathname.startsWith("/api/audio/") && req.method === "GET") {
+      const relPath = decodeURIComponent(url.pathname.slice("/api/audio/".length));
       const filePath = join(SAMPLES_DIR, relPath);
 
       // Prevent directory traversal
       if (!filePath.startsWith(SAMPLES_DIR)) {
-        return new Response("Forbidden", { status: 403, headers: CORS_HEADERS });
+        return new Response("Forbidden", { status: 403 });
       }
 
       const file = Bun.file(filePath);
       if (!(await file.exists())) {
-        return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
+        return new Response("Not Found", { status: 404 });
       }
 
       const ext = relPath.split(".").pop()?.toLowerCase();
@@ -129,7 +122,6 @@ Bun.serve({
 
       return new Response(file, {
         headers: {
-          ...CORS_HEADERS,
           "Content-Type": contentType,
           "Content-Length": String(file.size),
           "Accept-Ranges": "bytes",
@@ -138,12 +130,26 @@ Bun.serve({
       });
     }
 
-    if (url.pathname === "/" && req.method === "GET") {
-      return Response.json({ status: "ok", cached: cachedSamples !== null }, { headers: CORS_HEADERS });
+    // --- Static file serving (client build) ---
+
+    // Try to serve static files from client/dist
+    let filePath = join(CLIENT_DIST, url.pathname === "/" ? "index.html" : url.pathname);
+    let file = Bun.file(filePath);
+    if (await file.exists()) {
+      return new Response(file);
     }
 
-    return new Response("Not Found", { status: 404, headers: CORS_HEADERS });
+    // SPA fallback: serve index.html for non-file routes
+    filePath = join(CLIENT_DIST, "index.html");
+    file = Bun.file(filePath);
+    if (await file.exists()) {
+      return new Response(file, {
+        headers: { "Content-Type": "text/html" },
+      });
+    }
+
+    return new Response("Not Found", { status: 404 });
   },
 });
 
-console.log("Sample Map server listening on http://localhost:3720");
+console.log("Sample Map listening on http://localhost:3720");

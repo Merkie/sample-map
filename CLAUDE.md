@@ -7,9 +7,9 @@ Interactive audio sample similarity visualizer. Extracts audio features with Pyt
 ```
 sample-map/
   server/
-    index.ts               # Bun.serve() on port 3720
+    index.ts               # Bun.serve() on port 3720 (API + static files)
     extract.py             # Python: librosa features + t-SNE → JSON
-  client/src/              # SolidJS + Canvas 2D + Vite on port 3721
+  client/src/              # SolidJS + Canvas 2D (Vite for dev)
     App.tsx                # Canvas + loading/error overlays
     engine/
       index.ts             # SampleMapEngine — RAF loop, camera, audio playback
@@ -23,15 +23,26 @@ sample-map/
 
 ## Running
 
+### Production (single terminal)
+
+```bash
+cd client && bun install && bun run build
+cd .. && bun server/index.ts
+```
+
+Open http://localhost:3720
+
+### Development (two terminals, with HMR)
+
 ```bash
 # Terminal 1
-cd server && bun index.ts
+bun server/index.ts
 
 # Terminal 2
 cd client && bun install && bun run dev
 ```
 
-Open http://localhost:3721
+Open http://localhost:3721 (Vite proxies `/api` to port 3720)
 
 ## Key Details
 
@@ -41,7 +52,7 @@ Open http://localhost:3721
   - `maxDuration=2` (default) — filter to one-shots only. Set to `0` to disable.
   - `excludeLoops=true` (default) — filters out samples with "loop" in the name. Set to `false` to include.
 - `GET /api/samples/refresh` — bust cache, re-run Python extraction
-- `GET /audio/{relativePath}` — serves audio files from `samples/` directory
+- `GET /api/audio/{relativePath}` — serves audio files from `samples/` directory
 
 ### Caching
 
