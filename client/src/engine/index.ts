@@ -628,8 +628,19 @@ export class SampleMapEngine {
           y: existing.y + (node.y - existing.y) * t,
         });
       } else {
-        // New node (sample was swapped in) — start from a disappeared vertex's position
-        const start = disappeared.shift() ?? { x: node.x, y: node.y };
+        // New node (sample was swapped in) — start from the closest disappeared vertex
+        let start = { x: node.x, y: node.y };
+        if (disappeared.length > 0) {
+          let bestIdx = 0;
+          let bestDist = Infinity;
+          for (let j = 0; j < disappeared.length; j++) {
+            const dx = disappeared[j].x - node.x;
+            const dy = disappeared[j].y - node.y;
+            const d = dx * dx + dy * dy;
+            if (d < bestDist) { bestDist = d; bestIdx = j; }
+          }
+          start = disappeared.splice(bestIdx, 1)[0];
+        }
         newVertices.push({
           x: start.x + (node.x - start.x) * t,
           y: start.y + (node.y - start.y) * t,
