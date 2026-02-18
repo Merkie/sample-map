@@ -1,0 +1,150 @@
+import type { SampleNode } from "./types";
+import type { Camera } from "./camera";
+import { hexToRgb } from "./utils";
+import { SAMPLE_RADIUS, HUD_TITLE } from "./constants";
+
+type Star = { x: number; y: number; b: number; s: number; d: number };
+type WorldToScreen = (wx: number, wy: number) => [number, number];
+
+const STAR_PARALLAX = [0.03, 0.12, 0.28, 0.85];
+const STAR_ZOOM = [0.08, 0.25, 0.5, 0.9];
+
+export function renderStars(
+  ctx: CanvasRenderingContext2D,
+  stars: Star[],
+  camera: Camera,
+  width: number,
+  height: number,
+  time: number,
+): void {
+  const cx = width / 2;
+  const cy = height / 2;
+
+  for (const star of stars) {
+    const starX = star.x * width;
+    const starY = star.y * height;
+    const panStr = STAR_PARALLAX[star.d];
+    const zoomStr = STAR_ZOOM[star.d];
+    const px = camera.x * panStr;
+    const py = camera.y * panStr;
+    const zf = 1 + (camera.zoom - 1) * zoomStr;
+
+    const sx = cx + (starX - cx - px) * zf;
+    const sy = cy + (starY - cy - py) * zf;
+
+    if (sx < -10 || sx > width + 10 || sy < -10 || sy > height + 10) continue;
+
+    const twinkle = 0.5 + 0.5 * Math.sin(time * (0.3 + star.b) + star.x * 0.1);
+    ctx.globalAlpha = star.b * twinkle;
+    ctx.fillStyle = "#c8d8ff";
+    ctx.beginPath();
+    ctx.arc(sx, sy, star.s * zf, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+export function renderSamples(
+  ctx: CanvasRenderingContext2D,
+  nodes: SampleNode[],
+  camera: Camera,
+  width: number,
+  height: number,
+  time: number,
+  worldToScreen: WorldToScreen,
+): void {
+  const radius = SAMPLE_RADIUS * camera.zoom;
+
+  // Glow pass (additive blending)
+  ctx.globalCompositeOperation = "lighter";
+  for (const node of nodes) {
+    const [x, y] = worldToScreen(node.x, node.y);
+    if (x < -50 || x > width + 50 || y < -50 || y > height + 50) continue;
+
+    const [r, g, b] = hexToRgb(node.color);
+    const pulse = 0.5 + 0.5 * Math.sin(time * 2 + node.tsneX * 0.05);
+    const baseGlow = 0.04 + pulse * 0.03;
+    const hoverBoost = node.hovered ? 0.3 : 0;
+    const glowAlpha = baseGlow + node.glow * 0.25 + hoverBoost;
+    const glowWorld = SAMPLE_RADIUS * (2.5 + node.glow * 4 + (node.hovered ? 2 : 0));
+    const glowSize = glowWorld * Math.min(camera.zoom, 1.2);
+
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${glowAlpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, glowSize, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (node.glow > 0.1 || node.hovered) {
+      const innerGlow = Math.max(node.glow, node.hovered ? 0.4 : 0);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${innerGlow * 0.35})`;
+      const innerWorld = SAMPLE_RADIUS * (1.8 + innerGlow * 1.5);
+      const innerSize = innerWorld * Math.min(camera.zoom, 1.2);
+      ctx.beginPath();
+      ctx.arc(x, y, innerSize, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalCompositeOperation = "source-over";
+
+  // Solid cores
+  for (const node of nodes) {
+    const [x, y] = worldToScreen(node.x, node.y);
+    if (x < -30 || x > width + 30 || y < -30 || y > height + 30) continue;
+
+    const [r, g, b] = hexToRgb(node.color);
+
+    if (node.hovered) {
+      ctx.shadowColor = node.color;
+      ctx.shadowBlur = 18 * Math.min(camera.zoom, 1.2);
+    }
+
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.85 + node.glow * 0.15})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+
+    // Hot white center
+    const centerAlpha = 0.35 + node.glow * 0.5 + (node.hovered ? 0.3 : 0);
+    ctx.fillStyle = `rgba(255, 255, 255, ${centerAlpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+
+  }
+}
+
+export function renderHUD(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  sampleCount: number,
+  hoveredNode: SampleNode | null,
+): void {
+  // Title (top left)
+  ctx.textAlign = "left";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+  ctx.font = "11px monospace";
+  ctx.fillText(HUD_TITLE, 24, 24);
+
+  // Sample count (bottom right)
+  ctx.textAlign = "right";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+  ctx.font = "12px monospace";
+  ctx.fillText(`${sampleCount} samples`, width - 24, height - 16);
+
+  // Hover tooltip (bottom left)
+  if (hoveredNode) {
+    ctx.textAlign = "left";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+    ctx.font = "12px monospace";
+    ctx.fillText(hoveredNode.relativePath, 24, height - 16);
+
+    const [r, g, b] = hexToRgb(hoveredNode.color);
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.8)`;
+    ctx.font = "11px monospace";
+    ctx.fillText(hoveredNode.category, 24, height - 34);
+  }
+}

@@ -1,0 +1,47 @@
+// Category → color mapping
+export const CATEGORY_COLORS: Record<string, string> = {
+  Kick: "#ef4444",
+  kick: "#ef4444",
+  Snare: "#3b82f6",
+  snare: "#3b82f6",
+  Hat: "#22c55e",
+  hat: "#22c55e",
+  Bass: "#a855f7",
+  bass: "#a855f7",
+  SFX: "#eab308",
+  sfx: "#eab308",
+  Inst: "#06b6d4",
+  inst: "#06b6d4",
+};
+
+export const DEFAULT_COLOR = "#7c8db5";
+
+// Physics config (d3-force)
+export const physicsConfig = {
+  positionStrength: 0.12,       // softer pull toward t-SNE targets (links do the clustering)
+  chargeStrength: -40,          // base repulsion
+  collideRadius: 14,            // prevent overlap
+  neighborK: 5,                 // k-nearest neighbors to link
+  linkDistanceMin: 8,           // closest neighbors
+  linkDistanceMax: 60,          // furthest of the k neighbors
+  linkStrength: 0.4,            // how strongly links pull
+  velocityDecay: 0.35,          // damping (higher = less jelly)
+  preSettleTicks: 400,
+};
+
+// t-SNE coordinate scaling (scale raw t-SNE range to ±200 world units)
+export const TSNE_SCALE = 200;
+
+// Camera — free mode
+export const ZOOM_MIN = 0.15;
+export const ZOOM_MAX = 5;
+export const ZOOM_FRICTION = 0.88;
+export const ZOOM_SNAP_BACK_STIFFNESS = 0.12;
+export const ZOOM_WHEEL_SENSITIVITY = -0.000055;
+
+// Sample dot rendering
+export const SAMPLE_RADIUS = 6;
+export const SAMPLE_GLOW_DECAY = 2;
+
+// HUD
+export const HUD_TITLE = "SAMPLE MAP";

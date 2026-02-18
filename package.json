@@ -1,0 +1,6 @@
+{
+  "name": "sample-map",
+  "version": "2.0.0",
+  "private": true,
+  "workspaces": ["server", "client"]
+}
