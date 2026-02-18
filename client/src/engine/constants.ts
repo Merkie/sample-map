@@ -47,7 +47,7 @@ export const SAMPLE_GLOW_DECAY = 2;
 export const HUD_TITLE = "SAMPLE MAP";
 
 // Selection ring (decagon)
-export const RING_VERTEX_COUNT = 10;
+export const RING_VERTEX_COUNT = 32;
 export const RING_INNER_RADIUS = 14;
 export const RING_OUTER_RADIUS = 20;
 export const RING_BASE_STIFFNESS = 180;
@@ -57,5 +57,11 @@ export const RING_NEAR_BOOST = 8;
 export const RING_STRETCH_RANGE = 80;
 export const RING_APPEAR_SPEED = 40;
 export const RING_MAX_DELAY = 0.08;
+export const RING_BOUNCE_DELAY = 0.1;
+export const RING_BOUNCE_FREQ = 25;
+export const RING_BOUNCE_DECAY = 6;
+export const RING_BOUNCE_AMOUNT = 0.15;
+export const RING_NAV_MAX_DIST = 300;
+export const RING_NAV_CONE_HALF = Math.PI / 3;  // ±60° cone
 export const RING_INNER_STIFFNESS_MULT = 1.3;
 export const RING_OUTER_STIFFNESS_MULT = 0.85;

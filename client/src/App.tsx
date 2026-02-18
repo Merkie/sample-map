@@ -24,6 +24,18 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         engine?.onEscape();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        engine?.onArrowKey("up");
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        engine?.onArrowKey("down");
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        engine?.onArrowKey("left");
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        engine?.onArrowKey("right");
       }
     };
 

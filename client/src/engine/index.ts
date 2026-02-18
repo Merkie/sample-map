@@ -11,6 +11,7 @@ import {
   TSNE_SCALE,
   ZOOM_MIN, ZOOM_MAX, ZOOM_FRICTION, ZOOM_SNAP_BACK_STIFFNESS, ZOOM_WHEEL_SENSITIVITY,
   SAMPLE_RADIUS, SAMPLE_GLOW_DECAY,
+  RING_NAV_MAX_DIST, RING_NAV_CONE_HALF,
   physicsConfig,
 } from "./constants";
 import { clamp, hslToHex } from "./utils";
@@ -281,6 +282,49 @@ export class SampleMapEngine {
   onEscape() {
     if (this.selectionRing.active) {
       dismissRing(this.selectionRing);
+    }
+  }
+
+  onArrowKey(direction: "up" | "down" | "left" | "right") {
+    if (!this.selectionRing.active || !this.selectionRing.node) return;
+
+    const current = this.selectionRing.node;
+    const dirAngle =
+      direction === "right" ? 0 :
+      direction === "down" ? Math.PI / 2 :
+      direction === "left" ? Math.PI :
+      -Math.PI / 2; // up
+
+    let best: SampleNode | null = null;
+    let bestScore = Infinity;
+
+    for (const node of this.nodes) {
+      if (node === current) continue;
+
+      const dx = node.x - current.x;
+      const dy = node.y - current.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > RING_NAV_MAX_DIST || dist < 0.01) continue;
+
+      // Angle from current to candidate
+      let angle = Math.atan2(dy, dx);
+      // Angle difference (wrapped to -π..π)
+      let diff = angle - dirAngle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+
+      if (Math.abs(diff) > RING_NAV_CONE_HALF) continue;
+
+      // Score: prefer close + aligned (lower is better)
+      const score = dist * (1 + Math.abs(diff) * 2);
+      if (score < bestScore) {
+        bestScore = score;
+        best = node;
+      }
+    }
+
+    if (best) {
+      selectNode(this.selectionRing, best);
     }
   }
 

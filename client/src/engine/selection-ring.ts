@@ -10,6 +10,10 @@ import {
   RING_STRETCH_RANGE,
   RING_APPEAR_SPEED,
   RING_MAX_DELAY,
+  RING_BOUNCE_DELAY,
+  RING_BOUNCE_FREQ,
+  RING_BOUNCE_DECAY,
+  RING_BOUNCE_AMOUNT,
   RING_INNER_STIFFNESS_MULT,
   RING_OUTER_STIFFNESS_MULT,
 } from "./constants";
@@ -30,6 +34,7 @@ export interface SelectionRingState {
   node: SampleNode | null;
   visibility: number;
   targetVisibility: number;
+  bounceTime: number;
   vertices: VertexState[];
 }
 
@@ -50,6 +55,7 @@ export function createSelectionRing(): SelectionRingState {
     node: null,
     visibility: 0,
     targetVisibility: 0,
+    bounceTime: 0,
     vertices,
   };
 }
@@ -59,6 +65,7 @@ export function selectNode(ring: SelectionRingState, node: SampleNode): void {
   ring.active = true;
   ring.node = node;
   ring.targetVisibility = 1;
+  ring.bounceTime = 0;
 
   if (!wasActive) {
     // First appearance — all vertices start at node center, spring outward
@@ -104,8 +111,13 @@ export function updateSelectionRing(ring: SelectionRingState, dt: number): void 
     return;
   }
 
-  const innerR = RING_INNER_RADIUS * ring.visibility;
-  const outerR = RING_OUTER_RADIUS * ring.visibility;
+  // Settle bounce: decaying sinusoidal pulse on target radii after arrival
+  ring.bounceTime += dt;
+  const bt = Math.max(0, ring.bounceTime - RING_BOUNCE_DELAY);
+  const bounce = Math.sin(bt * RING_BOUNCE_FREQ) * Math.exp(-bt * RING_BOUNCE_DECAY) * RING_BOUNCE_AMOUNT;
+
+  const innerR = RING_INNER_RADIUS * ring.visibility * (1 + bounce);
+  const outerR = RING_OUTER_RADIUS * ring.visibility * (1 + bounce);
   const minThick = MIN_THICKNESS * ring.visibility;
 
   for (let i = 0; i < RING_VERTEX_COUNT; i++) {
