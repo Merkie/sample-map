@@ -156,7 +156,7 @@ export default function Sequencer() {
         // Timing
         const stepMs = 60000 / curBpm / 4;
         const swingOffset = stepMs * (curSwing / 100) * 0.33;
-        const delay = isOdd ? stepMs + swingOffset : stepMs - swingOffset;
+        const delay = isOdd ? stepMs - swingOffset : stepMs + swingOffset;
 
         step = nextStep;
         timerId = setTimeout(tick, delay);
