@@ -23,26 +23,11 @@ sample-map/
 
 ## Running
 
-### Production (single terminal)
-
 ```bash
-cd client && bun install && bun run build
-cd .. && bun server/index.ts
+bun install
+bun run dev      # dev with HMR → http://localhost:3721
+bun run start    # production build → http://localhost:3720
 ```
-
-Open http://localhost:3720
-
-### Development (two terminals, with HMR)
-
-```bash
-# Terminal 1
-bun server/index.ts
-
-# Terminal 2
-cd client && bun install && bun run dev
-```
-
-Open http://localhost:3721 (Vite proxies `/api` to port 3720)
 
 ## Key Details
 
