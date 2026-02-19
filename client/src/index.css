@@ -1,3 +1,34 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; overflow: hidden; }
 body { background: #000408; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* Range slider thumbs */
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.85);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.85);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+
+/* Swing slider thumb — teal to match the swing accent color */
+input[type="range"].swing-slider::-webkit-slider-thumb {
+  background: rgba(100,225,225,0.9);
+  box-shadow: 0 0 6px rgba(100,225,225,0.4);
+}
+input[type="range"].swing-slider::-moz-range-thumb {
+  background: rgba(100,225,225,0.9);
+  box-shadow: 0 0 6px rgba(100,225,225,0.4);
+}

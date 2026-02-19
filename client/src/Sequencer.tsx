@@ -491,6 +491,7 @@ export default function Sequencer() {
           </span>
           <div style={{ position: "relative", width: "80px", height: "24px", display: "flex", "align-items": "center" }}>
             <input
+              class="swing-slider"
               type="range"
               min={0}
               max={100}
