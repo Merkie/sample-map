@@ -406,7 +406,7 @@ export default function App() {
   };
 
   return (
-    <div class="w-screen h-screen relative overflow-hidden bg-base">
+    <div class="w-screen h-dvh relative overflow-hidden bg-base">
       {/* Canvas */}
       <canvas
         ref={canvasRef}
