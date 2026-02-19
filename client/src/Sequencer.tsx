@@ -798,7 +798,7 @@ export default function Sequencer() {
                       opacity: sortable.isActiveDraggable ? "0.25" : "1",
                       ...transformStyle(sortable.transform),
                       transition: sortable.isActiveDraggable ? undefined : "transform 200ms ease",
-                      "z-index": sortable.isActiveDraggable ? "1" : undefined,
+                      "z-index": sortable.isActiveDraggable ? "1" : scatterPopupTrack() === rowIdx() ? "50" : undefined,
                     }}
                   >
                     {/* Volume fader */}
@@ -973,8 +973,8 @@ export default function Sequencer() {
                             </Show>
                           </div>
 
-                          {/* Scatter radius popup (on hover) */}
-                          <Show when={scatterPopupTrack() === rowIdx()}>
+                          {/* Scatter radius popup (on hover, only when scatter enabled) */}
+                          <Show when={scatterPopupTrack() === rowIdx() && seqScatterEnabled()[rowIdx()]}>
                             <div
                               style={{
                                 position: "absolute",
