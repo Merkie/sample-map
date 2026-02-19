@@ -981,17 +981,18 @@ export default function Sequencer() {
                                 top: "100%",
                                 left: "50%",
                                 transform: "translateX(-50%)",
-                                "padding-top": "6px",
+                                padding: "10px 12px 8px 12px",
                               }}
                             >
                             <div
                               style={{
+                                position: "relative",
+                                "z-index": "100",
                                 background: "rgb(20,22,28)",
                                 border: "1px solid rgba(255,255,255,0.1)",
                                 "border-radius": "6px",
                                 "box-shadow": "0 6px 24px rgba(0,0,0,0.8)",
                                 padding: "5px 8px",
-                                "z-index": "100",
                                 display: "flex",
                                 "align-items": "center",
                                 gap: "6px",

@@ -872,7 +872,18 @@ export class SampleMapEngine {
     if (this.showZoneBorders) {
       renderZoneBorders(ctx, this.nodes, wts, this.camera.zoom);
     }
-    renderSequencerPolygon(ctx, this.polygonVertices, wts);
+
+    // Build per-vertex scatter screen radii for polygon line clipping
+    const cappedZoom = Math.min(this.camera.zoom, 1.2);
+    const scatterLookup = new Map<string, number>();
+    for (const sc of this.scatterCircles) {
+      scatterLookup.set(sc.nodeId, sc.radius);
+    }
+    const polyScatterRadii = this.polygonTargetIds.map(id => {
+      const r = scatterLookup.get(id);
+      return r ? r * cappedZoom : 0;
+    });
+    renderSequencerPolygon(ctx, this.polygonVertices, wts, polyScatterRadii);
     renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
     renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode, this.selectionRing.node);
 

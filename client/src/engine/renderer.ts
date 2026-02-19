@@ -117,6 +117,7 @@ export function renderSequencerPolygon(
   ctx: CanvasRenderingContext2D,
   vertices: Array<{ x: number; y: number }>,
   worldToScreen: WorldToScreen,
+  scatterScreenRadii?: number[],
 ): void {
   if (vertices.length < 2) return;
 
@@ -126,24 +127,48 @@ export function renderSequencerPolygon(
   cx /= vertices.length;
   cy /= vertices.length;
 
-  const sorted = [...vertices].sort((a, b) =>
-    Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx)
+  const indexed = vertices.map((v, i) => ({ v, i }));
+  indexed.sort((a, b) =>
+    Math.atan2(a.v.y - cy, a.v.x - cx) - Math.atan2(b.v.y - cy, b.v.x - cx)
   );
 
-  const pts = sorted.map(v => worldToScreen(v.x, v.y));
+  const pts = indexed.map(({ v }) => worldToScreen(v.x, v.y));
+  const radii = scatterScreenRadii
+    ? indexed.map(({ i }) => scatterScreenRadii[i] || 0)
+    : indexed.map(() => 0);
 
   ctx.save();
   ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
   ctx.lineWidth = 1.5;
   ctx.shadowColor = "rgba(255, 255, 255, 0.2)";
   ctx.shadowBlur = 6;
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0], pts[0][1]);
-  for (let i = 1; i < pts.length; i++) {
-    ctx.lineTo(pts[i][0], pts[i][1]);
+
+  // Draw each edge, clipping at scatter circle boundaries
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    const [x1, y1] = pts[i];
+    const [x2, y2] = pts[j];
+
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 0.001) continue;
+
+    const ux = dx / dist;
+    const uy = dy / dist;
+
+    const startOffset = radii[i];
+    const endOffset = radii[j];
+
+    // If circles overlap or consume the entire edge, skip
+    if (startOffset + endOffset >= dist) continue;
+
+    ctx.beginPath();
+    ctx.moveTo(x1 + ux * startOffset, y1 + uy * startOffset);
+    ctx.lineTo(x2 - ux * endOffset, y2 - uy * endOffset);
+    ctx.stroke();
   }
-  ctx.closePath();
-  ctx.stroke();
+
   ctx.restore();
 }
 
@@ -223,16 +248,10 @@ export function renderScatterCircles(
     const [sx, sy] = worldToScreen(node.x, node.y);
     const screenRadius = circle.radius * cappedZoom;
 
-    // Faint fill
+    // Stroke only — matches polygon line color and thickness
     ctx.beginPath();
     ctx.arc(sx, sy, screenRadius, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
-    ctx.fill();
-
-    // Solid stroke
-    ctx.beginPath();
-    ctx.arc(sx, sy, screenRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
     ctx.lineWidth = 1.5;
     ctx.stroke();
   }
