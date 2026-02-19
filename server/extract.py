@@ -92,6 +92,18 @@ def main():
     tsne_elapsed = time.perf_counter() - tsne_start
     print(f"t-SNE: {tsne_elapsed:.2f}s", file=sys.stderr)
 
+    # Rotate t-SNE coords so the principal axis of variance is horizontal.
+    # This spreads nodes wider on landscape screens for better browser UX.
+    cov = np.cov(coords, rowvar=False)
+    eigenvalues, eigenvectors = np.linalg.eigh(cov)
+    # eigh returns ascending order; last eigenvector = principal axis
+    principal = eigenvectors[:, -1]
+    angle = np.arctan2(principal[1], principal[0])
+    cos_a, sin_a = np.cos(-angle), np.sin(-angle)
+    rotation = np.array([[cos_a, -sin_a], [sin_a, cos_a]])
+    coords = coords @ rotation.T
+    print(f"PCA rotation: {np.degrees(angle):.1f}° → horizontal", file=sys.stderr)
+
     # Cluster t-SNE coordinates to define zones (spatial grouping, not thresholds)
     n_zones = min(4, len(coords))
     km = KMeans(n_clusters=n_zones, random_state=42, n_init=10)
