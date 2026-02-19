@@ -53,6 +53,7 @@ Contains all global signals:
 - `seqBpm`, `seqSwing` — sequencer BPM and swing amount (global for preset save/load)
 - `debugActive` — debug panel open/closed
 - `showZoneBorders` — toggle zone border rendering
+- `physicsEnabled` — toggle d3-force physics on/off (default true)
 - `presets` — user-saved presets loaded from server (`SavedPreset[]`)
 - `showAdaptModal` — controls the adaptation modal when loading presets with missing samples
 - `applyPresetFn` — callback signal set by Sequencer, used by adaptation modal to apply presets
@@ -66,13 +67,12 @@ Contains all global signals:
   - `excludeLoops=true` (default) — filters out samples with "loop" in the name. Set to `false` to include.
 - `GET /api/samples/refresh` — bust cache, re-run Python extraction
 - `GET /api/audio/{relativePath}` — serves audio files from `samples/` directory
-- `GET /api/presets` — returns user-saved presets JSON array (or `[]` if none)
-- `POST /api/presets` — saves a new preset; assigns a generated ID (`preset-{timestamp}-{random}`), appends to `.sample-map-presets.json`, returns the preset with ID
+- User presets are stored in `localStorage` under the key `"sample-map-presets"` (no server API)
 
 ### Caching
 
 - First extraction writes `.sample-map-cache.json` in project root
-- User-saved presets are stored in `.sample-map-presets.json` in project root
+- User-saved presets are stored in `localStorage` (key: `"sample-map-presets"`)
 - Subsequent server starts load from cache instantly
 - Delete the cache file or hit `/api/samples/refresh` after adding new samples
 
@@ -98,15 +98,16 @@ Contains all global signals:
 - `forceCollide` prevents overlap
 - Pre-settles 400 ticks before first render
 - All config in `client/src/engine/constants.ts`
+- Can be toggled off via debug panel (`physicsEnabled` signal / `engine.setPhysicsEnabled()`); when off, nodes snap to raw t-SNE positions and per-frame ticks are skipped
 
 ### Zone Classification
 
-Samples are classified into 4 instrument zones: `kick`, `snare`, `hihat`, `perc`. Classification is spatial, not threshold-based:
+Samples are classified into 4 instrument zones: `kick`, `perc`, `snare`, `hihat`. Classification is spatial, not threshold-based:
 
 1. After t-SNE, k-means (k=4) clusters the 2D coordinates
 2. KNN smoothing (k=7, majority vote, up to 10 passes) reassigns boundary samples so each zone is spatially contiguous — no stray outliers
 3. Bisector reconciliation: recomputes centroids from smoothed labels, then reassigns any node that's closer to another zone's centroid — guarantees every node is on the correct side of the Voronoi bisectors used for rendering
-4. Clusters are labeled by average spectral centroid: lowest → kick, next → snare, next → perc, highest → hihat
+4. Clusters are labeled by average spectral centroid: lowest → kick, next → perc (tonal hand drums like congas/bongos/cowbells), next → snare (noisy broadband snares/claps), highest → hihat
 
 The `zone` field is included in the JSON output and cached. The `SampleNode` type carries it as `zone: "kick" | "hihat" | "snare" | "perc"`.
 
@@ -134,7 +135,7 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 
 - **Factory presets**: 9 built-in patterns stored as `FACTORY_PRESETS: SavedPreset[]` in `presets.ts`. Each has `samplePath: ""` so they always trigger adaptation. Patterns with genre-accurate BPMs:
   - Four on the Floor (120), Basic Rock (120), Hip Hop (90), Boom Bap (90, 45% swing), Trap (140), Dembow Classic (98), Dembow Full (98), Perreo (100), Clear (120)
-- **User presets**: saved via POST to `/api/presets`, persisted in `.sample-map-presets.json`, loaded on startup via GET `/api/presets`
+- **User presets**: saved to `localStorage` (key: `"sample-map-presets"`), loaded on startup
 - **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, tracks: [{ samplePath, sampleCategory, pattern }] }`
 - **Loading flow**: `handleLoadPreset()` checks if all `samplePath` values match loaded nodes. If all match → `applyPreset(preset, false)` (exact). If any missing → shows adaptation modal
 - **Adaptation modal** (`App.tsx`): glassmorphism overlay explaining samples will be zone-matched. "Load with My Samples" calls `applyPreset(preset, true)` which picks zone-matched replacements
@@ -148,7 +149,9 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Floating draggable panel (drag via header bar)
 - Options:
   - **Show zone borders**: renders dashed convex hull borders per zone with color-coded labels (kick=red, snare=blue, hihat=green, perc=yellow). Borders are clipped against Voronoi bisectors (with 8-unit margin for d3-force drift) so zones never overlap.
-- State: `debugActive` and `showZoneBorders` signals in `state.ts`; `engine.showZoneBorders` boolean drives rendering
+  - **d3-force physics**: toggle physics post-processing on/off (default on). When off, nodes snap to raw t-SNE positions. When toggled back on, simulation is recreated and pre-settled. Calls `zoomToFit()` on toggle.
+  - **Refresh sample cache**: re-runs Python feature extraction and reloads samples into the engine. Equivalent to hitting `/api/samples/refresh`. Shows "Refreshing..." state while working.
+- State: `debugActive`, `showZoneBorders`, and `physicsEnabled` signals in `state.ts`; `engine.showZoneBorders` and `engine.physicsEnabled` booleans drive rendering/simulation
 
 ### Audio Playback
 
@@ -160,13 +163,14 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 ### Python Extraction (`server/extract.py`)
 
 - Discovers .wav/.mp3 recursively in samples dir
-- Per-file: duration, RMS, ZCR, spectral centroid/bandwidth/rolloff, 13 MFCCs
+- Per-file: 26 features — duration, RMS, ZCR, spectral centroid/bandwidth/rolloff/flatness, 7-band spectral contrast, 13 MFCCs
+- Spectral flatness and contrast were added to better separate tonal sounds (whistles, cowbells) from noisy broadband sounds (snares, kicks) — without these, outlier samples like whistles could land near kicks due to matching duration/loudness
 - StandardScaler normalization → t-SNE (perplexity=min(30, n-1))
 - k-means (k=4) on t-SNE coords → KNN smoothing → zone labels
 - Outputs JSON with: name, relativePath, category, zone, duration, x, y
 
 ## Dependencies
 
-- **Server**: Bun runtime only (no npm deps)
+- **Server**: Bun runtime only (no npm deps, pure Bun APIs — `Bun.serve`, `Bun.file`, `Bun.write`, `Bun.spawn`)
 - **Client**: solid-js, d3-force, @thisbeyond/solid-dnd, vite, vite-plugin-solid
 - **Python**: librosa, scikit-learn, numpy (in `venv/`)

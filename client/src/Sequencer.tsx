@@ -106,8 +106,12 @@ export default function Sequencer() {
       }
     }
 
+    // Factory presets have empty samplePaths — skip the modal and adapt directly
+    const isFactory = preset.tracks.every((t) => !t.samplePath);
     if (missingCount === 0) {
       applyPreset(preset, false);
+    } else if (isFactory) {
+      applyPreset(preset, true);
     } else {
       setShowAdaptModal({ preset, missingCount });
       setShowPresets(false);
@@ -135,19 +139,17 @@ export default function Sequencer() {
       })),
     };
 
-    try {
-      const res = await fetch("/api/presets", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(preset),
-      });
-      if (res.ok) {
-        const saved: SavedPreset = await res.json();
-        setPresets((prev) => [...prev, saved]);
-        setSaveName("");
-        setShowSaveInput(false);
-      }
-    } catch { /* silently fail */ }
+    const saved: SavedPreset = {
+      ...preset,
+      id: `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    };
+    setPresets((prev) => {
+      const next = [...prev, saved];
+      try { localStorage.setItem("sample-map-presets", JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+    setSaveName("");
+    setShowSaveInput(false);
   };
 
   // Sync grid rows when tracks are added

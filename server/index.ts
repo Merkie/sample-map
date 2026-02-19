@@ -5,7 +5,6 @@ const PYTHON = resolve(ROOT, "venv", "bin", "python3");
 const EXTRACT_PY = resolve(ROOT, "server", "extract.py");
 const SAMPLES_DIR = resolve(ROOT, "samples");
 const CACHE_FILE = resolve(ROOT, ".sample-map-cache.json");
-const PRESETS_FILE = resolve(ROOT, ".sample-map-presets.json");
 const CLIENT_DIST = resolve(ROOT, "client", "dist");
 
 let cachedSamples: unknown[] | null = null;
@@ -134,42 +133,6 @@ Bun.serve({
           "Cache-Control": "public, max-age=86400",
         },
       });
-    }
-
-    // Load saved presets
-    if (url.pathname === "/api/presets" && req.method === "GET") {
-      try {
-        const presetsFile = Bun.file(PRESETS_FILE);
-        if (await presetsFile.exists()) {
-          const text = await presetsFile.text();
-          return Response.json(JSON.parse(text));
-        }
-        return Response.json([]);
-      } catch {
-        return Response.json([]);
-      }
-    }
-
-    // Save a new preset
-    if (url.pathname === "/api/presets" && req.method === "POST") {
-      try {
-        const preset = await req.json();
-        preset.id = `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        let presets: unknown[] = [];
-        const presetsOnDisk = Bun.file(PRESETS_FILE);
-        if (await presetsOnDisk.exists()) {
-          try {
-            const text = await presetsOnDisk.text();
-            presets = JSON.parse(text);
-          } catch { /* start fresh */ }
-        }
-        presets.push(preset);
-        await Bun.write(PRESETS_FILE, JSON.stringify(presets, null, 2));
-        return Response.json(preset);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500 });
-      }
     }
 
     // --- Static file serving (client build) ---

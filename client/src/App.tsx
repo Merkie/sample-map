@@ -375,7 +375,7 @@ export default function App() {
       }
       setLoading(false);
       // Fetch user presets (non-blocking, non-critical)
-      fetchPresets();
+      loadPresets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch samples";
       setError(message);
@@ -383,13 +383,10 @@ export default function App() {
     }
   };
 
-  const fetchPresets = async () => {
+  const loadPresets = () => {
     try {
-      const res = await fetch("/api/presets");
-      if (res.ok) {
-        const data = await res.json();
-        setPresets(data);
-      }
+      const raw = localStorage.getItem("sample-map-presets");
+      if (raw) setPresets(JSON.parse(raw));
     } catch { /* silently ignore */ }
   };
 

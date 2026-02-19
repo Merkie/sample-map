@@ -54,10 +54,10 @@ The **randomize** (dice) button swaps each track's sample for a random one from 
 
 Samples are classified into 4 instrument zones: **kick**, **snare**, **hihat**, **perc**. Instead of hand-tuned audio feature thresholds, classification uses spatial clustering on the t-SNE output:
 
-1. t-SNE embeds all 19 audio features (duration, RMS, ZCR, centroid, bandwidth, rolloff, 13 MFCCs) into 2D
+1. t-SNE embeds 26 audio features (duration, RMS, ZCR, spectral centroid/bandwidth/rolloff/flatness, 7-band spectral contrast, 13 MFCCs) into 2D
 2. k-means (k=4) finds natural spatial clusters
 3. KNN smoothing (k=7, majority vote) cleans up boundary samples so each zone is spatially contiguous
-4. Clusters are labeled by average spectral centroid: lowest → kick, highest → hihat
+4. Clusters are labeled by average spectral centroid: lowest → kick, next → perc (tonal hand drums), next → snare (noisy broadband), highest → hihat
 
 ## Deselection
 
@@ -67,3 +67,5 @@ Click on the header bar, sequencer background, or empty canvas space to dismiss 
 
 Click **debug** in the header to open a draggable floating panel. Options:
 - **Show zone borders** — draws dashed convex hull borders around each zone with color-coded labels
+- **d3-force physics** — toggle the d3-force post-processing on/off. When off, samples snap to raw t-SNE positions
+- **Refresh sample cache** — re-runs Python feature extraction (equivalent to hitting `/api/samples/refresh`)
