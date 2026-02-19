@@ -1,5 +1,12 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show, untrack } from "solid-js";
-import { Dices, Library, Plus, Save } from "lucide-solid";
+import { Dices, GripVertical, Library, Lock, LockOpen, Plus, Save } from "lucide-solid";
+import {
+  DragDropProvider,
+  DragDropSensors,
+  SortableProvider,
+  createSortable,
+  closestCenter,
+} from "@thisbeyond/solid-dnd";
 import type { SampleNode } from "./engine";
 import {
   engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
@@ -79,16 +86,16 @@ const FACTORY_PRESETS: SavedPreset[] = [
   },
 ];
 const FALLBACK_TRACKS = [
-  { name: "Kick", color: "#818cf8" },
-  { name: "Snare", color: "#ef4444" },
-  { name: "Hat", color: "#eab308" },
-  { name: "Perc", color: "#22c55e" },
+  { id: "fallback-0", name: "Kick", color: "#818cf8" },
+  { id: "fallback-1", name: "Snare", color: "#ef4444" },
+  { id: "fallback-2", name: "Hat", color: "#eab308" },
+  { id: "fallback-3", name: "Perc", color: "#22c55e" },
 ];
 
 export default function Sequencer() {
   const tracks = createMemo(() =>
     seqSamples().length > 0
-      ? seqSamples().map((s) => ({ name: s.name, color: s.color }))
+      ? seqSamples().map((s) => ({ id: s.id, name: s.name, color: s.color }))
       : FALLBACK_TRACKS,
   );
   const [grid, setGrid] = createSignal(
@@ -98,6 +105,11 @@ export default function Sequencer() {
   const [showPresets, setShowPresets] = createSignal(false);
   const [showSaveInput, setShowSaveInput] = createSignal(false);
   const [saveName, setSaveName] = createSignal("");
+  const [lockedTracks, setLockedTracks] = createSignal<boolean[]>(
+    Array.from({ length: 4 }, () => false),
+  );
+  const [activeDragId, setActiveDragId] = createSignal<string | number | null>(null);
+  const sortableIds = createMemo(() => tracks().map((t) => t.id));
 
   /** Apply a preset: resolve samples by path or zone, set grid/bpm/swing */
   const applyPreset = (preset: SavedPreset, adapt: boolean) => {
@@ -137,6 +149,7 @@ export default function Sequencer() {
       setGrid(newGrid);
       setSeqBpm(preset.bpm);
       setSeqSwing(preset.swing);
+      setLockedTracks(Array.from({ length: resolvedSamples.length }, () => false));
       eng.highlightedNodeIds = new Set(resolvedSamples.map((s) => s.id));
     }
     setShowPresets(false);
@@ -211,6 +224,18 @@ export default function Sequencer() {
     });
   });
 
+  // Sync locked tracks length with track count
+  createEffect(() => {
+    const needed = tracks().length;
+    setLockedTracks((prev) => {
+      if (prev.length === needed) return prev;
+      if (prev.length > needed) return prev.slice(0, needed);
+      const next = [...prev];
+      while (next.length < needed) next.push(false);
+      return next;
+    });
+  });
+
   // Scheduler
   let timerId: ReturnType<typeof setTimeout> | null = null;
 
@@ -273,6 +298,44 @@ export default function Sequencer() {
       next[row][col] = !next[row][col];
       return next;
     });
+  };
+
+  const handleDragEnd = ({ draggable, droppable }: { draggable: any; droppable: any }) => {
+    setActiveDragId(null);
+    if (!draggable || !droppable) return;
+
+    const samples = seqSamples();
+    const fromIdx = samples.findIndex((s) => s.id === draggable.id);
+    const toIdx = samples.findIndex((s) => s.id === droppable.id);
+    if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return;
+
+    const reorder = <T,>(arr: T[]): T[] => {
+      const next = [...arr];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next;
+    };
+
+    setSeqSamples(reorder);
+    setGrid((prev) => reorder(prev));
+    setLockedTracks((prev) => reorder(prev));
+
+    // Adjust armed track index
+    const armed = armedTrack();
+    if (armed >= 0) {
+      if (armed === fromIdx) {
+        setArmedTrack(toIdx);
+      } else if (fromIdx < armed && toIdx >= armed) {
+        setArmedTrack(armed - 1);
+      } else if (fromIdx > armed && toIdx <= armed) {
+        setArmedTrack(armed + 1);
+      }
+    }
+
+    const eng = engine();
+    if (eng) {
+      eng.highlightedNodeIds = new Set(seqSamples().map((s) => s.id));
+    }
   };
 
   return (
@@ -441,9 +504,19 @@ export default function Sequencer() {
             const eng = engine();
             if (!eng) return;
             const current = seqSamples();
+            const locked = lockedTracks();
             const next: SampleNode[] = [];
             const usedIds = new Set<string>();
-            for (const sample of current) {
+            // Pre-reserve locked track sample IDs
+            for (let i = 0; i < current.length; i++) {
+              if (locked[i]) usedIds.add(current[i].id);
+            }
+            for (let i = 0; i < current.length; i++) {
+              if (locked[i]) {
+                next.push(current[i]);
+                continue;
+              }
+              const sample = current[i];
               const zonePool = eng.nodes.filter((n) => n.zone === sample.zone && n.id !== sample.id && !usedIds.has(n.id));
               const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => n.id !== sample.id && !usedIds.has(n.id));
               const picked = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : sample;
@@ -728,155 +801,232 @@ export default function Sequencer() {
       </div>
 
       {/* Grid */}
-      <div
-        style={{
-          display: "flex",
-          "flex-direction": "column",
-          gap: "3px",
-          padding: "0 16px",
-          "overflow-x": "auto",
-        }}
+      <DragDropProvider
+        onDragStart={({ draggable }: any) => setActiveDragId(draggable.id)}
+        onDragEnd={handleDragEnd}
+        collisionDetector={closestCenter}
       >
-        <For each={tracks()}>
-          {(track, rowIdx) => (
-            <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
-              {/* Track label */}
-              <div
-                data-seq-interactive
-                onClick={() => {
-                  const idx = rowIdx();
-                  if (armedTrack() === idx) {
-                    setArmedTrack(-1);
-                  } else {
-                    setArmedTrack(idx);
-                    const samples = seqSamples();
-                    if (samples[idx]) {
-                      engine()?.focusNode(samples[idx]);
-                    }
-                  }
-                }}
-                style={{
-                  width: "52px",
-                  "flex-shrink": "0",
-                  "font-size": "0.62rem",
-                  "font-weight": "600",
-                  "letter-spacing": "0.05em",
-                  "text-transform": "uppercase",
-                  color: armedTrack() === rowIdx() ? "#ffffff" : track.color,
-                  opacity: armedTrack() === rowIdx() ? "1" : "0.7",
-                  "text-align": "left",
-                  overflow: "hidden",
-                  "text-overflow": "ellipsis",
-                  "white-space": "nowrap",
-                  cursor: "pointer",
-                  transition: "color 0.15s, opacity 0.15s",
-                }}
-                title={armedTrack() === rowIdx() ? "Click a sample on the map..." : track.name}
-              >
-                {track.name}
-              </div>
-
-              {/* Steps */}
-              <div style={{ display: "flex", gap: "3px", flex: "1" }}>
-                <For each={grid()[rowIdx()]}>
-                  {(active, colIdx) => {
-                    const isOddGroup = () => Math.floor(colIdx() / 4) % 2 === 1;
-                    const isPlayhead = () => currentStep() === colIdx();
-                    return (
-                      <div
-                        onClick={() => toggle(rowIdx(), colIdx())}
-                        style={{
-                          position: "relative",
-                          flex: "1",
-                          height: "48px",
-                          "min-width": "20px",
-                          "border-radius": "5px",
-                          background: active
-                            ? track.color
-                            : isOddGroup()
-                              ? "rgba(255,255,255,0.03)"
-                              : "rgba(255,255,255,0.055)",
-                          cursor: "pointer",
-                          transition: "background 0.1s, box-shadow 0.1s",
-                          "box-shadow": isPlayhead()
-                            ? active
-                              ? `0 0 12px ${track.color}88, inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1.5px rgba(255,255,255,0.5)`
-                              : "inset 0 0 0 1.5px rgba(255,255,255,0.3), inset 0 1px 0 rgba(255,255,255,0.03)"
-                            : active
-                              ? `0 0 8px ${track.color}44, inset 0 1px 0 rgba(255,255,255,0.15)`
-                              : "inset 0 1px 0 rgba(255,255,255,0.03)",
-                          overflow: "hidden",
-                          "margin-left": "0",
-                        }}
-                      >
-                        {/* Top notch */}
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: "3px",
-                            left: "50%",
-                            transform: "translateX(-50%)",
-                            width: "40%",
-                            height: "4px",
-                            "border-radius": "2px",
-                            background: active
-                              ? "rgba(0,0,0,0.25)"
-                              : "rgba(255,255,255,0.04)",
-                          }}
-                        />
-                        {/* Playhead overlay */}
-                        {isPlayhead() && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              inset: "0",
-                              "border-radius": "5px",
-                              background: active
-                                ? "rgba(255,255,255,0.12)"
-                                : "rgba(255,255,255,0.06)",
-                              "pointer-events": "none",
-                            }}
-                          />
-                        )}
-                      </div>
-                    );
-                  }}
-                </For>
-              </div>
-            </div>
-          )}
-        </For>
-
-        {/* Add track button */}
+        <DragDropSensors />
         <div
-          data-seq-interactive
-          onClick={() => {
-            const eng = engine();
-            if (!eng || eng.nodes.length === 0) return;
-            const usedIds = new Set(seqSamples().map((s) => s.id));
-            const available = eng.nodes.filter((n) => !usedIds.has(n.id));
-            const pool = available.length > 0 ? available : eng.nodes;
-            const sample = pool[Math.floor(Math.random() * pool.length)];
-            setSeqSamples((prev) => [...prev, sample]);
-            eng.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id), sample.id]);
-            setArmedTrack(seqSamples().length - 1);
-          }}
           style={{
             display: "flex",
-            "align-items": "center",
-            "justify-content": "center",
-            height: "28px",
-            "margin-top": "2px",
-            "border-radius": "5px",
-            border: "1px dashed rgba(255,255,255,0.08)",
-            color: "rgba(255,255,255,0.25)",
-            cursor: "pointer",
-            transition: "all 0.15s",
+            "flex-direction": "column",
+            gap: "3px",
+            padding: "0 16px",
+            overflow: "hidden",
           }}
         >
-          <Plus size={14} />
+          <SortableProvider ids={sortableIds()}>
+            <For each={tracks()}>
+              {(track, rowIdx) => {
+                const sortable = createSortable(track.id);
+                return (
+                  <div
+                    ref={(el: HTMLElement) => sortable(el)}
+                    style={{
+                      display: "flex",
+                      "align-items": "center",
+                      gap: "6px",
+                      opacity: activeDragId() === track.id ? "0.4" : "1",
+                    }}
+                  >
+                    {/* Track label — flex column: name + buttons */}
+                    <div
+                      data-seq-interactive
+                      style={{
+                        width: "100px",
+                        "flex-shrink": "0",
+                        display: "flex",
+                        "flex-direction": "column",
+                        gap: "2px",
+                        padding: "2px 0",
+                      }}
+                    >
+                      {/* Sample name */}
+                      <div
+                        onClick={() => {
+                          const idx = rowIdx();
+                          if (armedTrack() === idx) {
+                            setArmedTrack(-1);
+                          } else {
+                            setArmedTrack(idx);
+                            const samples = seqSamples();
+                            if (samples[idx]) {
+                              engine()?.focusNode(samples[idx]);
+                            }
+                          }
+                        }}
+                        style={{
+                          "font-size": "0.72rem",
+                          "font-weight": "600",
+                          "letter-spacing": "0.03em",
+                          color: armedTrack() === rowIdx() ? "#ffffff" : track.color,
+                          opacity: armedTrack() === rowIdx() ? "1" : "0.85",
+                          overflow: "hidden",
+                          "text-overflow": "ellipsis",
+                          "white-space": "nowrap",
+                          cursor: "pointer",
+                          transition: "color 0.15s, opacity 0.15s",
+                          "line-height": "1.2",
+                        }}
+                        title={armedTrack() === rowIdx() ? "Click a sample on the map..." : track.name}
+                      >
+                        {track.name}
+                      </div>
+
+                      {/* Buttons row: grip handle + lock */}
+                      <div style={{ display: "flex", gap: "4px", "align-items": "center" }}>
+                        {/* Grip handle */}
+                        <div
+                          data-seq-interactive
+                          style={{
+                            color: "rgba(255,255,255,0.25)",
+                            cursor: "grab",
+                            display: "flex",
+                            "align-items": "center",
+                            padding: "1px",
+                            "border-radius": "2px",
+                            transition: "color 0.15s",
+                          }}
+                          title="Drag to reorder"
+                        >
+                          <GripVertical size={11} />
+                        </div>
+
+                        {/* Lock button */}
+                        <div
+                          data-seq-interactive
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const idx = rowIdx();
+                            setLockedTracks((prev) => {
+                              const next = [...prev];
+                              next[idx] = !next[idx];
+                              return next;
+                            });
+                          }}
+                          style={{
+                            color: lockedTracks()[rowIdx()]
+                              ? "rgba(100,225,225,0.8)"
+                              : "rgba(255,255,255,0.2)",
+                            cursor: "pointer",
+                            display: "flex",
+                            "align-items": "center",
+                            padding: "1px",
+                            "border-radius": "2px",
+                            transition: "color 0.15s",
+                          }}
+                          title={lockedTracks()[rowIdx()] ? "Unlock track (allow randomize)" : "Lock track (prevent randomize)"}
+                        >
+                          {lockedTracks()[rowIdx()] ? <Lock size={10} /> : <LockOpen size={10} />}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Steps */}
+                    <div style={{ display: "flex", gap: "3px", flex: "1" }}>
+                      <For each={grid()[rowIdx()]}>
+                        {(active, colIdx) => {
+                          const isOddGroup = () => Math.floor(colIdx() / 4) % 2 === 1;
+                          const isPlayhead = () => currentStep() === colIdx();
+                          return (
+                            <div
+                              onClick={() => toggle(rowIdx(), colIdx())}
+                              style={{
+                                position: "relative",
+                                flex: "1",
+                                height: "48px",
+                                "min-width": "20px",
+                                "border-radius": "5px",
+                                background: active
+                                  ? track.color
+                                  : isOddGroup()
+                                    ? "rgba(255,255,255,0.03)"
+                                    : "rgba(255,255,255,0.055)",
+                                cursor: "pointer",
+                                transition: "background 0.1s, box-shadow 0.1s",
+                                "box-shadow": isPlayhead()
+                                  ? active
+                                    ? `0 0 12px ${track.color}88, inset 0 1px 0 rgba(255,255,255,0.15), inset 0 0 0 1.5px rgba(255,255,255,0.5)`
+                                    : "inset 0 0 0 1.5px rgba(255,255,255,0.3), inset 0 1px 0 rgba(255,255,255,0.03)"
+                                  : active
+                                    ? `0 0 8px ${track.color}44, inset 0 1px 0 rgba(255,255,255,0.15)`
+                                    : "inset 0 1px 0 rgba(255,255,255,0.03)",
+                                overflow: "hidden",
+                                "margin-left": "0",
+                              }}
+                            >
+                              {/* Top notch */}
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: "3px",
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  width: "40%",
+                                  height: "4px",
+                                  "border-radius": "2px",
+                                  background: active
+                                    ? "rgba(0,0,0,0.25)"
+                                    : "rgba(255,255,255,0.04)",
+                                }}
+                              />
+                              {/* Playhead overlay */}
+                              {isPlayhead() && (
+                                <div
+                                  style={{
+                                    position: "absolute",
+                                    inset: "0",
+                                    "border-radius": "5px",
+                                    background: active
+                                      ? "rgba(255,255,255,0.12)"
+                                      : "rgba(255,255,255,0.06)",
+                                    "pointer-events": "none",
+                                  }}
+                                />
+                              )}
+                            </div>
+                          );
+                        }}
+                      </For>
+                    </div>
+                  </div>
+                );
+              }}
+            </For>
+          </SortableProvider>
+
+          {/* Add track button */}
+          <div
+            data-seq-interactive
+            onClick={() => {
+              const eng = engine();
+              if (!eng || eng.nodes.length === 0) return;
+              const usedIds = new Set(seqSamples().map((s) => s.id));
+              const available = eng.nodes.filter((n) => !usedIds.has(n.id));
+              const pool = available.length > 0 ? available : eng.nodes;
+              const sample = pool[Math.floor(Math.random() * pool.length)];
+              setSeqSamples((prev) => [...prev, sample]);
+              eng.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id), sample.id]);
+              setArmedTrack(seqSamples().length - 1);
+            }}
+            style={{
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
+              height: "28px",
+              "margin-top": "2px",
+              "border-radius": "5px",
+              border: "1px dashed rgba(255,255,255,0.08)",
+              color: "rgba(255,255,255,0.25)",
+              cursor: "pointer",
+              transition: "all 0.15s",
+            }}
+          >
+            <Plus size={14} />
+          </div>
         </div>
-      </div>
+      </DragDropProvider>
     </div>
   );
 }

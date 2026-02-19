@@ -119,7 +119,10 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Track colors: Kick = indigo (#818cf8), Snare = red (#ef4444), Hat = yellow (#eab308), Perc = green (#22c55e)
 - Transport bar: play/stop button (also toggled via spacebar when sequencer is open), BPM number input, swing slider with percentage readout
 - Swing uses MPC 3000-style 16ths: even steps (0, 2, 4…) stay locked to the grid, odd steps (1, 3, 5…) get delayed proportionally to the swing amount. 0% = straight, 100% = max delay (~33% of a step duration, roughly triplet feel). Total pair time stays constant so tempo never drifts.
-- **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty. Accumulates `usedIds` to prevent duplicates across tracks
+- **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty. Accumulates `usedIds` to prevent duplicates across tracks. **Respects track locks** — locked tracks keep their current sample during randomize
+- **Track labels**: flex column layout — sample name on top (0.72rem, clickable to arm), grip handle + lock button below. Width 100px for better readability
+- **Track locking**: per-track lock button (Lock/LockOpen icons) prevents randomize from changing that track's sample. Lock state is component-local (`lockedTracks` boolean array), NOT saved in presets. Loading a preset resets all locks to unlocked
+- **Track reordering**: drag-and-drop via `@thisbeyond/solid-dnd` (`SortableProvider` + `createSortable`). Grip handle (GripVertical icon) indicates drag affordance. On reorder, `seqSamples`, `grid`, and `lockedTracks` arrays are reordered in parallel; armed track index is adjusted
 - **Initial sample pick** (`pickSequencerSamples`): picks one sample from each of the preferred zones `["kick", "snare", "hihat", "perc"]` for the default 4 tracks
 - On toggle: sets `engine.bottomMargin` to sequencer height (tracked via `ResizeObserver`) and calls `zoomToFit()`, which animates the camera in sync with the slide
 - Canvas stays full-viewport; the camera zooms out and pans up to keep nodes visible above the sequencer
@@ -162,5 +165,5 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 ## Dependencies
 
 - **Server**: Bun runtime only (no npm deps)
-- **Client**: solid-js, d3-force, vite, vite-plugin-solid
+- **Client**: solid-js, d3-force, @thisbeyond/solid-dnd, vite, vite-plugin-solid
 - **Python**: librosa, scikit-learn, numpy (in `venv/`)

@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@thisbeyond/solid-dnd": "^0.7.5",
     "d3-force": "^3.0.0",
     "lucide-solid": "^0.574.0",
     "solid-js": "^1.9.5"
