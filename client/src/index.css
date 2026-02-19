@@ -6,6 +6,16 @@
   --color-accent: #64e1e1;
 }
 
+html, body {
+  touch-action: none;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  height: 100dvh;
+}
+
 /* Number input spinner removal */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

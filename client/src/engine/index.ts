@@ -102,6 +102,9 @@ export class SampleMapEngine {
   // Duplicate prevention: nodes to exclude from arrow-key navigation
   excludeNodeIds: Set<string> | null = null;
 
+  // Touch input active (suppresses hover-to-play)
+  touchActive = false;
+
   // Scatter circles: rendered as dashed circles around sample nodes
   scatterCircles: Array<{ nodeId: string; radius: number }> = [];
 
@@ -426,6 +429,29 @@ export class SampleMapEngine {
     this.zoomToFitTarget = null;
   }
 
+  /** Apply a pinch-zoom gesture: scale factor + focal point that may have moved (pan+zoom in one step) */
+  onPinchMove(prevFocalX: number, prevFocalY: number, newFocalX: number, newFocalY: number, scaleFactor: number) {
+    // Capture world point under the previous focal position
+    const [wx, wy] = this.screenToWorld(prevFocalX, prevFocalY);
+
+    // Apply zoom
+    this.camera.zoom *= scaleFactor;
+
+    // Re-anchor so that world point appears at the new focal position
+    // This handles both zoom-anchoring and pan from midpoint movement in one step
+    this.camera.x = wx - (newFocalX - this.width / 2) / this.camera.zoom;
+    this.camera.y = wy - (newFocalY - this.height / 2) / this.camera.zoom;
+
+    // Kill velocity/animation — pinch is direct manipulation
+    this.zoomVelocity = 0;
+    this.panVelocityX = 0;
+    this.panVelocityY = 0;
+    this.zoomFocalScreenX = newFocalX;
+    this.zoomFocalScreenY = newFocalY;
+    this.zoomToFitTarget = null;
+    this.followTarget = null;
+  }
+
   // ===== Main Loop =====
 
   tick = (timestamp: number) => {
@@ -466,8 +492,8 @@ export class SampleMapEngine {
   };
 
   private updateHover() {
-    // Clear hover when cursor is outside the window
-    if (!this.mouseInWindow) {
+    // Clear hover when cursor is outside the window or during touch interaction
+    if (!this.mouseInWindow || this.touchActive) {
       for (const node of this.nodes) node.hovered = false;
       this.hoveredNode = null;
       this.lastPlayedId = null;

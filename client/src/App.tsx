@@ -242,6 +242,90 @@ export default function App() {
       }
     };
 
+    // ===== Touch input (pinch-to-zoom + single-finger pan) =====
+    let lastPinchDist = 0;
+    let lastMidX = 0;
+    let lastMidY = 0;
+    let wasPinching = false;
+
+    const onTouchStart = (ev: TouchEvent) => {
+      ev.preventDefault();
+      const eng = engine();
+      if (!eng) return;
+      eng.touchActive = true;
+
+      if (ev.touches.length === 2) {
+        // Cancel any single-finger drag and dismiss selection ring
+        if (!wasPinching) eng.onPointerUp();
+        if (eng.selectionRing.active) eng.onEscape();
+        wasPinching = true;
+
+        const t0 = ev.touches[0];
+        const t1 = ev.touches[1];
+        lastPinchDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        lastMidX = (t0.clientX + t1.clientX) / 2;
+        lastMidY = (t0.clientY + t1.clientY) / 2;
+      } else if (ev.touches.length === 1 && !wasPinching) {
+        eng.onPointerDown(ev.touches[0].clientX, ev.touches[0].clientY);
+      }
+    };
+
+    const onTouchMove = (ev: TouchEvent) => {
+      ev.preventDefault();
+      const eng = engine();
+      if (!eng) return;
+
+      if (ev.touches.length === 2) {
+        const t0 = ev.touches[0];
+        const t1 = ev.touches[1];
+        const newDist = Math.hypot(t0.clientX - t1.clientX, t0.clientY - t1.clientY);
+        const newMidX = (t0.clientX + t1.clientX) / 2;
+        const newMidY = (t0.clientY + t1.clientY) / 2;
+
+        if (lastPinchDist > 0) {
+          const factor = newDist / lastPinchDist;
+          eng.onPinchMove(lastMidX, lastMidY, newMidX, newMidY, factor);
+        }
+
+        lastPinchDist = newDist;
+        lastMidX = newMidX;
+        lastMidY = newMidY;
+      } else if (ev.touches.length === 1 && !wasPinching) {
+        eng.onPointerMove(ev.touches[0].clientX, ev.touches[0].clientY);
+      }
+    };
+
+    const onTouchEnd = (ev: TouchEvent) => {
+      ev.preventDefault();
+      const eng = engine();
+      if (!eng) return;
+
+      if (ev.touches.length === 0) {
+        // All fingers lifted
+        if (wasPinching) {
+          wasPinching = false;
+          lastPinchDist = 0;
+        } else {
+          eng.onPointerUp(ev.changedTouches[0]?.clientX, ev.changedTouches[0]?.clientY);
+        }
+        eng.touchActive = false;
+      } else if (ev.touches.length === 1 && wasPinching) {
+        // Went from 2 fingers to 1 — don't start a new pan, wait for full release
+        lastPinchDist = 0;
+      }
+    };
+
+    const onWheelEvent = (ev: WheelEvent) => {
+      ev.preventDefault();
+      engine()?.onWheel(ev.deltaY, ev.clientX, ev.clientY);
+    };
+
+    canvasRef.addEventListener("wheel", onWheelEvent, { passive: false });
+    canvasRef.addEventListener("touchstart", onTouchStart, { passive: false });
+    canvasRef.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvasRef.addEventListener("touchend", onTouchEnd, { passive: false });
+    canvasRef.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
     window.addEventListener("resize", handleResize);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
@@ -259,6 +343,11 @@ export default function App() {
     fetchSamples();
 
     onCleanup(() => {
+      canvasRef.removeEventListener("wheel", onWheelEvent);
+      canvasRef.removeEventListener("touchstart", onTouchStart);
+      canvasRef.removeEventListener("touchmove", onTouchMove);
+      canvasRef.removeEventListener("touchend", onTouchEnd);
+      canvasRef.removeEventListener("touchcancel", onTouchEnd);
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
@@ -332,10 +421,6 @@ export default function App() {
           e.currentTarget.style.cursor = "grab";
         }}
         onMouseLeave={() => engine()?.onPointerLeave()}
-        onWheel={(e) => {
-          e.preventDefault();
-          engine()?.onWheel(e.deltaY, e.clientX, e.clientY);
-        }}
       />
 
       {/* Header */}
