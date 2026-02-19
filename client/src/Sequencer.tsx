@@ -1,5 +1,5 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show, untrack } from "solid-js";
-import { CircleDashed, CircleDotDashed, Dices, GripVertical, Library, Lock, LockOpen, Plus, Save } from "lucide-solid";
+import { CircleDashed, CircleDotDashed, Dices, GripVertical, Library, Lock, LockOpen, Plus, Save, X } from "lucide-solid";
 import {
   DragDropProvider,
   DragDropSensors,
@@ -11,16 +11,16 @@ import {
 import type { SampleNode } from "./engine";
 import { FACTORY_PRESETS } from "./presets";
 import {
-  STEPS,
+  STEPS_PER_BAR, TOTAL_STEPS,
   engine, seqActive, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
-  seqPlaying, setSeqPlaying, seqBpm, setSeqBpm, seqSwing, setSeqSwing,
+  seqPlaying, setSeqPlaying, seqBpm, setSeqBpm, seqSwing, setSeqSwing, seqBars, setSeqBars,
   presets, setPresets, setShowAdaptModal, setApplyPresetFn,
   seqGrid, setSeqGrid, seqStep, setSeqStep,
   seqLockedTracks, setSeqLockedTracks,
   seqTrackVolumes, setSeqTrackVolumes,
   seqScatterEnabled, setSeqScatterEnabled,
   seqScatterRadius, setSeqScatterRadius,
-  addSeqTrack,
+  addSeqTrack, removeSeqTrack,
   type SavedPreset,
 } from "./state";
 
@@ -43,7 +43,44 @@ export default function Sequencer() {
   const [showSaveInput, setShowSaveInput] = createSignal(false);
   const [saveName, setSaveName] = createSignal("");
   const [scatterPopupTrack, setScatterPopupTrack] = createSignal(-1);
+  const [confirmDeleteTrack, setConfirmDeleteTrack] = createSignal(-1);
   const sortableIds = createMemo(() => tracks().map((t) => t.id));
+  let gridScrollRef: HTMLDivElement | undefined;
+
+  const handleDeleteTrack = (idx: number) => {
+    const hasNotes = seqGrid()[idx]?.some((v) => v);
+    if (hasNotes) {
+      setConfirmDeleteTrack(idx);
+    } else {
+      doDeleteTrack(idx);
+    }
+  };
+
+  const doDeleteTrack = (idx: number) => {
+    const armed = armedTrack();
+    removeSeqTrack(idx);
+    if (armed === idx) setArmedTrack(-1);
+    else if (armed > idx) setArmedTrack(armed - 1);
+    const eng = engine();
+    if (eng) eng.highlightedNodeIds = new Set(seqSamples().map((s) => s.id));
+    setConfirmDeleteTrack(-1);
+  };
+
+  // Auto-scroll to keep playhead visible during playback
+  createEffect(() => {
+    const step = seqStep();
+    if (step < 0 || !gridScrollRef) return;
+    const stepWidth = 30; // matches fixed step width
+    const barGap = 6; // matches bar-boundary margin
+    const barsBeforeStep = Math.floor(step / STEPS_PER_BAR);
+    const stepLeft = step * (stepWidth + 3) + barsBeforeStep * barGap; // 3px gap between steps
+    const stickyWidth = 136; // volume(20) + label(100) + gaps(~16)
+    const viewLeft = gridScrollRef.scrollLeft;
+    const viewWidth = gridScrollRef.clientWidth - stickyWidth;
+    if (stepLeft < viewLeft || stepLeft + stepWidth > viewLeft + viewWidth) {
+      gridScrollRef.scrollTo({ left: Math.max(0, stepLeft - 60), behavior: "smooth" });
+    }
+  });
 
   /** Apply a preset: resolve samples by path or zone, set grid/bpm/swing */
   const applyPreset = (preset: SavedPreset, adapt: boolean) => {
@@ -80,7 +117,10 @@ export default function Sequencer() {
       if (node) {
         resolvedSamples.push(node);
         usedIds.add(node.id);
-        newGrid.push([...track.pattern]);
+        // Pad short patterns (e.g. 16-step presets) to TOTAL_STEPS
+        const padded = [...track.pattern];
+        while (padded.length < TOTAL_STEPS) padded.push(false);
+        newGrid.push(padded);
       }
     }
 
@@ -90,6 +130,7 @@ export default function Sequencer() {
       setSeqGrid(newGrid);
       setSeqBpm(preset.bpm);
       setSeqSwing(preset.swing);
+      setSeqBars(preset.bars ?? 1);
       setSeqLockedTracks(Array.from({ length: resolvedSamples.length }, () => false));
       setSeqTrackVolumes(preset.tracks.map((t) => t.volume ?? 1.0));
       setSeqScatterEnabled(preset.tracks.map((t) => t.scatter ?? false));
@@ -137,10 +178,11 @@ export default function Sequencer() {
       name,
       bpm: seqBpm(),
       swing: seqSwing(),
+      bars: seqBars(),
       tracks: samples.map((s, i) => ({
         samplePath: s.relativePath,
         sampleCategory: s.zone,
-        pattern: [...(g[i] || Array(STEPS).fill(false))],
+        pattern: [...(g[i] || Array(TOTAL_STEPS).fill(false))],
         volume: seqTrackVolumes()[i] ?? 1.0,
         scatter: seqScatterEnabled()[i] ?? false,
         scatterRadius: seqScatterRadius()[i] ?? 30,
@@ -222,7 +264,8 @@ export default function Sequencer() {
         setSeqStep(step);
 
         // Advance
-        const nextStep = (step + 1) % STEPS;
+        const curBars = untrack(seqBars);
+        const nextStep = (step + 1) % (curBars * STEPS_PER_BAR);
         const isOdd = step % 2 === 1;
 
         // Timing
@@ -439,6 +482,44 @@ export default function Sequencer() {
             onInput={(e) => setSeqBpm(parseInt(e.currentTarget.value) || 120)}
             style={{
               width: "48px",
+              height: "24px",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              "border-radius": "4px",
+              color: "rgba(255,255,255,0.8)",
+              "font-size": "0.72rem",
+              "font-family": "monospace",
+              "text-align": "center",
+              outline: "none",
+              "-moz-appearance": "textfield",
+            }}
+          />
+        </div>
+
+        {/* Bars */}
+        <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
+          <span
+            style={{
+              "font-size": "0.62rem",
+              "font-weight": "500",
+              "letter-spacing": "0.08em",
+              "text-transform": "uppercase",
+              color: "rgba(255,255,255,0.35)",
+            }}
+          >
+            Bars
+          </span>
+          <input
+            type="number"
+            value={seqBars()}
+            min={1}
+            max={8}
+            onInput={(e) => {
+              const v = parseInt(e.currentTarget.value);
+              if (v >= 1 && v <= 8) setSeqBars(v);
+            }}
+            style={{
+              width: "36px",
               height: "24px",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(255,255,255,0.1)",
@@ -779,12 +860,15 @@ export default function Sequencer() {
       >
         <DragDropSensors />
         <div
+          ref={gridScrollRef}
+          class="seq-grid-scroll"
           style={{
             display: "flex",
             "flex-direction": "column",
             gap: "3px",
             padding: "0 16px",
-            overflow: "hidden",
+            "overflow-x": "auto",
+            "overflow-y": "hidden",
           }}
         >
           <SortableProvider ids={sortableIds()}>
@@ -797,170 +881,149 @@ export default function Sequencer() {
                     style={{
                       display: "flex",
                       "align-items": "center",
-                      gap: "6px",
+                      gap: "0px",
                       opacity: sortable.isActiveDraggable ? "0.25" : "1",
                       ...transformStyle(sortable.transform),
                       transition: sortable.isActiveDraggable ? undefined : "transform 200ms ease",
                       "z-index": sortable.isActiveDraggable ? "1" : scatterPopupTrack() === rowIdx() ? "50" : undefined,
                     }}
                   >
-                    {/* Volume fader */}
+                    {/* Sticky track controls (volume + label) */}
                     <div
-                      data-seq-interactive
                       style={{
-                        width: "20px",
-                        height: "48px",
-                        "flex-shrink": "0",
+                        position: "sticky",
+                        left: "0",
+                        "z-index": "2",
                         display: "flex",
                         "align-items": "center",
-                        "justify-content": "center",
-                        position: "relative",
-                      }}
-                    >
-                      <input
-                        type="range"
-                        min={0}
-                        max={100}
-                        value={Math.round(seqTrackVolumes()[rowIdx()] * 100)}
-                        onInput={(e) => {
-                          const idx = rowIdx();
-                          const val = parseInt(e.currentTarget.value) / 100;
-                          setSeqTrackVolumes((prev) => {
-                            const next = [...prev];
-                            next[idx] = val;
-                            return next;
-                          });
-                        }}
-                        style={{
-                          width: "40px",
-                          height: "4px",
-                          "-webkit-appearance": "none",
-                          appearance: "none",
-                          background: `linear-gradient(to right, ${track.color} ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%, rgba(255,255,255,0.08) ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%)`,
-                          "border-radius": "2px",
-                          outline: "none",
-                          cursor: "pointer",
-                          transform: "rotate(-90deg)",
-                          "transform-origin": "center center",
-                        }}
-                        title={`Volume: ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%`}
-                      />
-                    </div>
-
-                    {/* Track label — flex column: name + buttons */}
-                    <div
-                      data-seq-interactive
-                      style={{
-                        width: "100px",
+                        gap: "6px",
+                        background: "rgb(16,18,24)",
+                        "padding-right": "6px",
                         "flex-shrink": "0",
-                        display: "flex",
-                        "flex-direction": "column",
-                        gap: "2px",
-                        padding: "2px 0",
                       }}
                     >
-                      {/* Sample name */}
+                      {/* Volume fader */}
                       <div
-                        onClick={() => {
-                          const idx = rowIdx();
-                          if (armedTrack() === idx) {
-                            setArmedTrack(-1);
-                          } else {
-                            setArmedTrack(idx);
-                            const samples = seqSamples();
-                            if (samples[idx]) {
-                              engine()?.focusNode(samples[idx]);
-                            }
-                          }
-                        }}
+                        data-seq-interactive
                         style={{
-                          "font-size": "0.72rem",
-                          "font-weight": "600",
-                          "letter-spacing": "0.03em",
-                          color: armedTrack() === rowIdx() ? "#ffffff" : track.color,
-                          opacity: armedTrack() === rowIdx() ? "1" : "0.85",
-                          overflow: "hidden",
-                          "text-overflow": "ellipsis",
-                          "white-space": "nowrap",
-                          cursor: "pointer",
-                          transition: "color 0.15s, opacity 0.15s",
-                          "line-height": "1.2",
+                          width: "20px",
+                          height: "48px",
+                          "flex-shrink": "0",
+                          display: "flex",
+                          "align-items": "center",
+                          "justify-content": "center",
+                          position: "relative",
                         }}
-                        title={armedTrack() === rowIdx() ? "Click a sample on the map..." : track.name}
                       >
-                        {track.name}
-                      </div>
-
-                      {/* Buttons row: grip handle + lock */}
-                      <div style={{ display: "flex", gap: "4px", "align-items": "center" }}>
-                        {/* Grip handle */}
-                        <div
-                          data-seq-interactive
-                          {...sortable.dragActivators}
-                          style={{
-                            color: "rgba(255,255,255,0.25)",
-                            cursor: "grab",
-                            display: "flex",
-                            "align-items": "center",
-                            padding: "1px",
-                            "border-radius": "2px",
-                            transition: "color 0.15s",
-                          }}
-                          title="Drag to reorder"
-                        >
-                          <GripVertical size={11} />
-                        </div>
-
-                        {/* Lock button */}
-                        <div
-                          data-seq-interactive
-                          onClick={(e) => {
-                            e.stopPropagation();
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={Math.round(seqTrackVolumes()[rowIdx()] * 100)}
+                          onInput={(e) => {
                             const idx = rowIdx();
-                            setSeqLockedTracks((prev) => {
+                            const val = parseInt(e.currentTarget.value) / 100;
+                            setSeqTrackVolumes((prev) => {
                               const next = [...prev];
-                              next[idx] = !next[idx];
+                              next[idx] = val;
                               return next;
                             });
                           }}
                           style={{
-                            color: seqLockedTracks()[rowIdx()]
-                              ? "rgba(100,225,225,0.8)"
-                              : "rgba(255,255,255,0.2)",
-                            cursor: "pointer",
-                            display: "flex",
-                            "align-items": "center",
-                            padding: "1px",
+                            width: "40px",
+                            height: "4px",
+                            "-webkit-appearance": "none",
+                            appearance: "none",
+                            background: `linear-gradient(to right, ${track.color} ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%, rgba(255,255,255,0.08) ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%)`,
                             "border-radius": "2px",
-                            transition: "color 0.15s",
+                            outline: "none",
+                            cursor: "pointer",
+                            transform: "rotate(-90deg)",
+                            "transform-origin": "center center",
                           }}
-                          title={seqLockedTracks()[rowIdx()] ? "Unlock track (allow randomize)" : "Lock track (prevent randomize)"}
+                          title={`Volume: ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%`}
+                        />
+                      </div>
+
+                      {/* Track label — flex column: name + buttons */}
+                      <div
+                        data-seq-interactive
+                        style={{
+                          width: "100px",
+                          "flex-shrink": "0",
+                          display: "flex",
+                          "flex-direction": "column",
+                          gap: "2px",
+                          padding: "2px 0",
+                        }}
+                      >
+                        {/* Sample name */}
+                        <div
+                          onClick={() => {
+                            const idx = rowIdx();
+                            if (armedTrack() === idx) {
+                              setArmedTrack(-1);
+                            } else {
+                              setArmedTrack(idx);
+                              const samples = seqSamples();
+                              if (samples[idx]) {
+                                engine()?.focusNode(samples[idx]);
+                              }
+                            }
+                          }}
+                          style={{
+                            "font-size": "0.72rem",
+                            "font-weight": "600",
+                            "letter-spacing": "0.03em",
+                            color: armedTrack() === rowIdx() ? "#ffffff" : track.color,
+                            opacity: armedTrack() === rowIdx() ? "1" : "0.85",
+                            overflow: "hidden",
+                            "text-overflow": "ellipsis",
+                            "white-space": "nowrap",
+                            cursor: "pointer",
+                            transition: "color 0.15s, opacity 0.15s",
+                            "line-height": "1.2",
+                          }}
+                          title={armedTrack() === rowIdx() ? "Click a sample on the map..." : track.name}
                         >
-                          <Show when={seqLockedTracks()[rowIdx()]} fallback={<LockOpen size={10} />}>
-                            <Lock size={10} />
-                          </Show>
+                          {track.name}
                         </div>
 
-                        {/* Scatter toggle */}
-                        <div
-                          data-seq-interactive
-                          style={{ position: "relative", "z-index": scatterPopupTrack() === rowIdx() ? "50" : undefined }}
-                          onMouseEnter={() => setScatterPopupTrack(rowIdx())}
-                          onMouseLeave={() => setScatterPopupTrack(-1)}
-                        >
+                        {/* Buttons row: grip handle + lock */}
+                        <div style={{ display: "flex", gap: "4px", "align-items": "center" }}>
+                          {/* Grip handle */}
                           <div
+                            data-seq-interactive
+                            {...sortable.dragActivators}
+                            style={{
+                              color: "rgba(255,255,255,0.25)",
+                              cursor: "grab",
+                              display: "flex",
+                              "align-items": "center",
+                              padding: "1px",
+                              "border-radius": "2px",
+                              transition: "color 0.15s",
+                            }}
+                            title="Drag to reorder"
+                          >
+                            <GripVertical size={11} />
+                          </div>
+
+                          {/* Lock button */}
+                          <div
+                            data-seq-interactive
                             onClick={(e) => {
                               e.stopPropagation();
                               const idx = rowIdx();
-                              setSeqScatterEnabled((prev) => {
+                              setSeqLockedTracks((prev) => {
                                 const next = [...prev];
                                 next[idx] = !next[idx];
                                 return next;
                               });
                             }}
                             style={{
-                              color: seqScatterEnabled()[rowIdx()]
-                                ? "rgba(45, 212, 191, 0.9)"
+                              color: seqLockedTracks()[rowIdx()]
+                                ? "rgba(100,225,225,0.8)"
                                 : "rgba(255,255,255,0.2)",
                               cursor: "pointer",
                               display: "flex",
@@ -969,103 +1032,161 @@ export default function Sequencer() {
                               "border-radius": "2px",
                               transition: "color 0.15s",
                             }}
-                            title={seqScatterEnabled()[rowIdx()] ? "Disable scatter" : "Enable scatter"}
+                            title={seqLockedTracks()[rowIdx()] ? "Unlock track (allow randomize)" : "Lock track (prevent randomize)"}
                           >
-                            <Show when={seqScatterEnabled()[rowIdx()]} fallback={<CircleDashed size={10} />}>
-                              <CircleDotDashed size={10} />
+                            <Show when={seqLockedTracks()[rowIdx()]} fallback={<LockOpen size={10} />}>
+                              <Lock size={10} />
                             </Show>
                           </div>
 
-                          {/* Scatter radius popup (on hover, only when scatter enabled) */}
-                          <Show when={scatterPopupTrack() === rowIdx() && seqScatterEnabled()[rowIdx()]}>
+                          {/* Scatter toggle */}
+                          <div
+                            data-seq-interactive
+                            style={{ position: "relative", "z-index": scatterPopupTrack() === rowIdx() ? "50" : undefined }}
+                            onMouseEnter={() => setScatterPopupTrack(rowIdx())}
+                            onMouseLeave={() => setScatterPopupTrack(-1)}
+                          >
                             <div
-                              style={{
-                                position: "absolute",
-                                top: "100%",
-                                left: "50%",
-                                transform: "translateX(-50%)",
-                                padding: "10px 12px 8px 12px",
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const idx = rowIdx();
+                                setSeqScatterEnabled((prev) => {
+                                  const next = [...prev];
+                                  next[idx] = !next[idx];
+                                  return next;
+                                });
                               }}
-                            >
-                            <div
                               style={{
-                                position: "relative",
-                                "z-index": "100",
-                                background: "rgb(20,22,28)",
-                                border: "1px solid rgba(255,255,255,0.1)",
-                                "border-radius": "6px",
-                                "box-shadow": "0 6px 24px rgba(0,0,0,0.8)",
-                                padding: "5px 8px",
+                                color: seqScatterEnabled()[rowIdx()]
+                                  ? "rgba(45, 212, 191, 0.9)"
+                                  : "rgba(255,255,255,0.2)",
+                                cursor: "pointer",
                                 display: "flex",
                                 "align-items": "center",
-                                gap: "6px",
-                                "white-space": "nowrap",
+                                padding: "1px",
+                                "border-radius": "2px",
+                                transition: "color 0.15s",
                               }}
+                              title={seqScatterEnabled()[rowIdx()] ? "Disable scatter" : "Enable scatter"}
                             >
-                              <input
-                                data-seq-interactive
-                                type="range"
-                                min={10}
-                                max={100}
-                                value={seqScatterRadius()[rowIdx()]}
-                                onInput={(e) => {
-                                  const idx = rowIdx();
-                                  const val = parseInt(e.currentTarget.value);
-                                  setSeqScatterRadius((prev) => {
-                                    const next = [...prev];
-                                    next[idx] = val;
-                                    return next;
-                                  });
-                                }}
+                              <Show when={seqScatterEnabled()[rowIdx()]} fallback={<CircleDashed size={10} />}>
+                                <CircleDotDashed size={10} />
+                              </Show>
+                            </div>
+
+                            {/* Scatter radius popup (on hover, only when scatter enabled) */}
+                            <Show when={scatterPopupTrack() === rowIdx() && seqScatterEnabled()[rowIdx()]}>
+                              <div
                                 style={{
-                                  width: "56px",
-                                  height: "3px",
-                                  "-webkit-appearance": "none",
-                                  appearance: "none",
-                                  background: `linear-gradient(to right, rgba(45,212,191,0.5) ${((seqScatterRadius()[rowIdx()] - 10) / 90) * 100}%, rgba(255,255,255,0.08) ${((seqScatterRadius()[rowIdx()] - 10) / 90) * 100}%)`,
-                                  "border-radius": "2px",
-                                  outline: "none",
-                                  cursor: "pointer",
-                                }}
-                              />
-                              <span
-                                style={{
-                                  "font-size": "0.55rem",
-                                  "font-family": "monospace",
-                                  color: "rgba(255,255,255,0.45)",
-                                  "min-width": "18px",
-                                  "text-align": "right",
+                                  position: "absolute",
+                                  top: "100%",
+                                  left: "50%",
+                                  transform: "translateX(-50%)",
+                                  padding: "10px 12px 8px 12px",
                                 }}
                               >
-                                {seqScatterRadius()[rowIdx()]}
-                              </span>
-                            </div>
-                            </div>
-                          </Show>
+                              <div
+                                style={{
+                                  position: "relative",
+                                  "z-index": "100",
+                                  background: "rgb(20,22,28)",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  "border-radius": "6px",
+                                  "box-shadow": "0 6px 24px rgba(0,0,0,0.8)",
+                                  padding: "5px 8px",
+                                  display: "flex",
+                                  "align-items": "center",
+                                  gap: "6px",
+                                  "white-space": "nowrap",
+                                }}
+                              >
+                                <input
+                                  data-seq-interactive
+                                  type="range"
+                                  min={10}
+                                  max={100}
+                                  value={seqScatterRadius()[rowIdx()]}
+                                  onInput={(e) => {
+                                    const idx = rowIdx();
+                                    const val = parseInt(e.currentTarget.value);
+                                    setSeqScatterRadius((prev) => {
+                                      const next = [...prev];
+                                      next[idx] = val;
+                                      return next;
+                                    });
+                                  }}
+                                  style={{
+                                    width: "56px",
+                                    height: "3px",
+                                    "-webkit-appearance": "none",
+                                    appearance: "none",
+                                    background: `linear-gradient(to right, rgba(45,212,191,0.5) ${((seqScatterRadius()[rowIdx()] - 10) / 90) * 100}%, rgba(255,255,255,0.08) ${((seqScatterRadius()[rowIdx()] - 10) / 90) * 100}%)`,
+                                    "border-radius": "2px",
+                                    outline: "none",
+                                    cursor: "pointer",
+                                  }}
+                                />
+                                <span
+                                  style={{
+                                    "font-size": "0.55rem",
+                                    "font-family": "monospace",
+                                    color: "rgba(255,255,255,0.45)",
+                                    "min-width": "18px",
+                                    "text-align": "right",
+                                  }}
+                                >
+                                  {seqScatterRadius()[rowIdx()]}
+                                </span>
+                              </div>
+                              </div>
+                            </Show>
+                          </div>
+
+                          {/* Delete track */}
+                          <div
+                            data-seq-interactive
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTrack(rowIdx());
+                            }}
+                            style={{
+                              color: "rgba(255,255,255,0.2)",
+                              cursor: "pointer",
+                              display: "flex",
+                              "align-items": "center",
+                              padding: "1px",
+                              "border-radius": "2px",
+                              transition: "color 0.15s",
+                            }}
+                            title="Remove track"
+                          >
+                            <X size={10} />
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Steps */}
-                    <div style={{ display: "flex", gap: "3px", flex: "1" }}>
-                      <For each={seqGrid()[rowIdx()]}>
+                    <div style={{ display: "flex", gap: "3px", flex: "1", "min-width": "min-content" }}>
+                      <For each={seqGrid()[rowIdx()]?.slice(0, seqBars() * STEPS_PER_BAR)}>
                         {(active, colIdx) => {
                           const isOddGroup = () => Math.floor(colIdx() / 4) % 2 === 1;
                           const isPlayhead = () => seqStep() === colIdx();
+                          const isBarBoundary = () => colIdx() > 0 && colIdx() % STEPS_PER_BAR === 0;
                           return (
                             <div
                               onClick={() => toggle(rowIdx(), colIdx())}
                               style={{
                                 position: "relative",
                                 flex: "1",
+                                "min-width": "30px",
                                 height: "48px",
-                                "min-width": "20px",
                                 "border-radius": "5px",
                                 background: active
                                   ? track.color
                                   : isOddGroup()
-                                    ? "rgba(255,255,255,0.03)"
-                                    : "rgba(255,255,255,0.055)",
+                                    ? "rgba(255,255,255,0.02)"
+                                    : "rgba(255,255,255,0.07)",
                                 cursor: "pointer",
                                 transition: "background 0.1s, box-shadow 0.1s",
                                 "box-shadow": isPlayhead()
@@ -1124,9 +1245,12 @@ export default function Sequencer() {
             data-seq-interactive
             onClick={handleAddTrack}
             style={{
+              position: "sticky",
+              left: "0",
               display: "flex",
               "align-items": "center",
               "justify-content": "center",
+              width: "136px",
               height: "28px",
               "margin-top": "2px",
               "border-radius": "5px",
@@ -1140,6 +1264,80 @@ export default function Sequencer() {
           </div>
         </div>
       </DragDropProvider>
+
+      {/* Delete track confirmation modal */}
+      <Show when={confirmDeleteTrack() >= 0}>
+        <div
+          onClick={() => setConfirmDeleteTrack(-1)}
+          style={{
+            position: "fixed",
+            inset: "0",
+            background: "rgba(0,0,0,0.5)",
+            "z-index": "200",
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "rgba(20,22,28,0.98)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              "border-radius": "12px",
+              "box-shadow": "0 16px 48px rgba(0,0,0,0.8)",
+              "backdrop-filter": "blur(16px)",
+              "-webkit-backdrop-filter": "blur(16px)",
+              padding: "20px 24px",
+              "max-width": "320px",
+              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            }}
+          >
+            <div style={{ "font-size": "0.85rem", "font-weight": "600", color: "rgba(255,255,255,0.9)", "margin-bottom": "8px" }}>
+              Delete track?
+            </div>
+            <div style={{ "font-size": "0.72rem", color: "rgba(255,255,255,0.5)", "margin-bottom": "16px", "line-height": "1.4" }}>
+              This track has notes. Are you sure you want to remove it?
+            </div>
+            <div style={{ display: "flex", gap: "8px", "justify-content": "flex-end" }}>
+              <button
+                onClick={() => setConfirmDeleteTrack(-1)}
+                style={{
+                  height: "28px",
+                  padding: "0 12px",
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  "border-radius": "6px",
+                  color: "rgba(255,255,255,0.6)",
+                  "font-size": "0.68rem",
+                  "font-weight": "500",
+                  cursor: "pointer",
+                  "font-family": "inherit",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => doDeleteTrack(confirmDeleteTrack())}
+                style={{
+                  height: "28px",
+                  padding: "0 12px",
+                  background: "rgba(239,68,68,0.15)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  "border-radius": "6px",
+                  color: "rgba(239,68,68,1)",
+                  "font-size": "0.68rem",
+                  "font-weight": "600",
+                  cursor: "pointer",
+                  "font-family": "inherit",
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      </Show>
     </div>
   );
 }

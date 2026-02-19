@@ -275,7 +275,7 @@ export default function App() {
         engine()?.onEscape();
         return;
       }
-      if (e.key === " " && seqActive()) {
+      if (e.key === " " && seqActive() && !(document.activeElement instanceof HTMLInputElement)) {
         e.preventDefault();
         setSeqPlaying(!seqPlaying());
         return;

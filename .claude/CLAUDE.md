@@ -51,7 +51,8 @@ Contains all global signals:
 - `armedTrack` — which track is armed for sample replacement
 - `seqPlaying` — sequencer transport playing/stopped
 - `seqBpm`, `seqSwing` — sequencer BPM and swing amount (global for preset save/load)
-- `seqGrid` — 2D boolean array of step patterns (rows × 16 steps)
+- `seqBars` — number of active bars (1–8, default 1)
+- `seqGrid` — 2D boolean array of step patterns (rows × 128 steps max, sliced to `seqBars * 16` for display/playback)
 - `seqStep` — current playback step index (-1 when stopped)
 - `seqLockedTracks` — per-track lock flags (prevent randomize)
 - `seqTrackVolumes` — per-track volume levels (0–1)
@@ -64,9 +65,15 @@ Contains all global signals:
 - `showAdaptModal` — controls the adaptation modal when loading presets with missing samples
 - `applyPresetFn` — callback signal set by Sequencer, used by adaptation modal to apply presets
 
+Constants:
+- `STEPS_PER_BAR` = 16 — steps in one bar
+- `NUM_BARS` = 8 — maximum bars
+- `TOTAL_STEPS` = 128 — `STEPS_PER_BAR * NUM_BARS`, used for grid array allocation
+
 Coordinated update functions (replace signal-to-signal sync effects):
 - `resetSeqTracks(samples)` — atomically resets seqSamples + all parallel arrays (grid, locks, volumes, scatter)
 - `addSeqTrack(sample)` — appends one track to seqSamples + all parallel arrays
+- `removeSeqTrack(idx)` — removes a track by index from all parallel arrays
 
 ## Key Details
 
@@ -125,15 +132,19 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 
 - Toggled via "seq" button in header; slides up from the bottom with a 350ms CSS transition (`cubic-bezier(0.4, 0, 0.2, 1)`)
 - Sequencer is always mounted in the DOM (no conditional rendering); hidden via `transform: translateY(100%)`
-- FL Studio-style step grid: 16 steps × 4 tracks (Kick, Snare, Hat, Perc)
+- FL Studio-style step grid: up to 8 bars (128 steps) × N tracks (default 4: Kick, Snare, Hat, Perc)
+- **Multi-bar support**: bar count adjustable 1–8 via transport bar input (`seqBars` signal, default 1). Grid arrays are always 128 steps; display/playback sliced to `seqBars * 16`. At 1 bar, steps use `flex: 1` to fill full width; at 2+ bars, steps are fixed 30px wide with horizontal scrolling
+- **Horizontal scroll**: grid container has `overflow-x: auto`; track labels (volume fader + name + buttons) are `position: sticky; left: 0` with opaque `rgb(16,18,24)` background so they stay pinned. Bar boundaries have 6px extra margin every 16 steps. Thin custom scrollbar styled via `.seq-grid-scroll` class in `index.css`
+- **Playhead auto-scroll**: a `createEffect` watches `seqStep()` and scrolls the grid container to keep the current step visible during playback
 - Each step is a rounded rectangle with a darkened notch at the top center
 - Steps alternate light/dark in groups of 4 (beat grouping)
 - Track colors: Kick = indigo (#818cf8), Snare = red (#ef4444), Hat = yellow (#eab308), Perc = green (#22c55e)
-- Transport bar: play/stop button (also toggled via spacebar when sequencer is open), BPM number input, swing slider with percentage readout
+- Transport bar: play/stop button (also toggled via spacebar when sequencer is open, unless an input is focused), BPM number input, bars number input (1–8), swing slider with percentage readout
 - Swing uses MPC 3000-style 16ths: even steps (0, 2, 4…) stay locked to the grid, odd steps (1, 3, 5…) get delayed proportionally to the swing amount. 0% = straight, 100% = max delay (~33% of a step duration, roughly triplet feel). Total pair time stays constant so tempo never drifts.
 - **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty. Accumulates `usedIds` to prevent duplicates across tracks. **Respects track locks** — locked tracks keep their current sample during randomize
-- **Track labels**: flex column layout — sample name on top (0.72rem, clickable to arm), grip handle + lock button below. Width 100px for better readability
+- **Track labels**: flex column layout — sample name on top (0.72rem, clickable to arm), grip handle + lock + scatter + delete buttons below. Width 100px for better readability
 - **Track locking**: per-track lock button (Lock/LockOpen icons) prevents randomize from changing that track's sample. Lock state is global (`seqLockedTracks` in state.ts), NOT saved in presets. Loading a preset resets all locks to unlocked
+- **Track deletion**: X button per track. If the track has any active notes, a confirmation modal appears ("Delete track? This track has notes.") with Cancel/Delete buttons. Empty tracks are deleted immediately. Uses `removeSeqTrack(idx)` for coordinated removal from all parallel arrays. Adjusts armed track index on delete
 - **Per-track volume**: vertical fader (20px-wide rotated `<input type="range">`) to the left of each track label. Global `seqTrackVolumes` signal (`number[]`, default 1.0 per track) in state.ts. Passed as 3rd arg to `engine.playSample()` which scales gain (`0.6 * volume`). Reordered in parallel with other track arrays on drag. Persisted in presets as `track.volume` (optional, defaults to 1.0 for backward compat). Loading a preset restores volumes; factory presets (no volume field) load at 100%
 - **Track reordering**: drag-and-drop via `@thisbeyond/solid-dnd` (`SortableProvider` + `createSortable`). Grip handle (GripVertical icon) indicates drag affordance. On reorder, `seqSamples`, `grid`, `lockedTracks`, and `trackVolumes` arrays are reordered in parallel; armed track index is adjusted
 - **Initial sample pick** (`pickSequencerSamples`): picks one sample from each of the preferred zones `["kick", "snare", "hihat", "perc"]` for the default 4 tracks
@@ -144,13 +155,18 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 
 ### Preset Library
 
-- **Factory presets**: 9 built-in patterns stored as `FACTORY_PRESETS: SavedPreset[]` in `presets.ts`. Each has `samplePath: ""` so they always trigger adaptation. Patterns with genre-accurate BPMs:
-  - Four on the Floor (120), Basic Rock (120), Hip Hop (90), Boom Bap (90, 45% swing), Trap (140), Dembow Classic (98), Dembow Full (98), Perreo (100), Clear (120)
+- **Factory presets**: 16 built-in patterns stored as `FACTORY_PRESETS: SavedPreset[]` in `presets.ts`. Each has `samplePath: ""` so they always trigger adaptation. Organized by genre:
+  - Hip Hop (90), Boom Bap (90, 45% swing), Trap (140)
+  - Afrobeat 1–5 (95–113), Afrobeat Starter (100)
+  - Dembow Starter (98), Reggaeton Starter (100), Reggaeton 1–3 (92–100), Perreo (100)
+  - Clear (120)
 - **User presets**: saved to `localStorage` (key: `"sample-map-presets"`), loaded on startup
-- **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, tracks: [{ samplePath, sampleCategory, pattern, volume? }] }`
+- **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, bars?, tracks: [{ samplePath, sampleCategory, pattern, volume? }] }`
 - **Loading flow**: `handleLoadPreset()` checks if all `samplePath` values match loaded nodes. If all match → `applyPreset(preset, false)` (exact). If any missing → shows adaptation modal
 - **Adaptation modal** (`App.tsx`): glassmorphism overlay explaining samples will be zone-matched. "Load with My Samples" calls `applyPreset(preset, true)` which picks zone-matched replacements
 - **Sample reuse on load**: when loading a preset (adapt or exact), `applyPreset` tries to reuse the user's current samples before picking random ones. Resolution order: exact path match → current sample from matching zone → random zone pick
+- **Bar count in presets**: `bars` field (optional, defaults to 1 for backward compat). Saved/restored alongside bpm and swing
+- **Pattern padding**: `applyPreset` pads patterns shorter than `TOTAL_STEPS` (128) with `false` so old 16-step presets load cleanly into bar 1 with the rest empty
 - **Save UI**: Save button (lucide `Save` icon) in transport bar opens a dropdown with name input. On save, POSTs to server and appends to `presets` signal
 - **Library dropdown**: two sections — "Patterns" (factory presets) and "My Presets" (user presets, shown only when non-empty)
 

@@ -39,15 +39,15 @@ All singleton/global state lives in `client/src/state.ts` as SolidJS signals —
 
 ## Sequencer
 
-Click **seq** in the header to open the drum sequencer — it slides up from the bottom while the star map smoothly zooms out and pans up to make room. 16-step grid with 4 tracks: Kick, Snare, Hat, Perc. Includes transport controls (play/stop, BPM, swing). Press **spacebar** to toggle play/pause while the sequencer is open. Swing uses MPC 3000-style timing — even steps stay locked to the grid while odd steps get delayed.
+Click **seq** in the header to open the drum sequencer — it slides up from the bottom while the star map smoothly zooms out and pans up to make room. Supports **1–8 bars** (16–128 steps) with a bars input in the transport bar. At 1 bar the steps fill the full width; at 2+ bars the grid scrolls horizontally with track labels pinned to the left. Includes transport controls (play/stop, BPM, bars, swing). Press **spacebar** to toggle play/pause while the sequencer is open (doesn't interfere with text inputs). Swing uses MPC 3000-style timing — even steps stay locked to the grid while odd steps get delayed. The playhead auto-scrolls the grid to stay visible during multi-bar playback.
 
-Each track has a **volume fader** on the left side for per-track mixing. The **randomize** (dice) button swaps each track's sample for a random one from the same zone — kicks stay kicks, hihats stay hihats, etc. **Lock** individual tracks to protect them from randomization — great for locking in samples you like while auditioning alternatives for the rest.
+Each track has a **volume fader** on the left side for per-track mixing. The **randomize** (dice) button swaps each track's sample for a random one from the same zone — kicks stay kicks, hihats stay hihats, etc. **Lock** individual tracks to protect them from randomization — great for locking in samples you like while auditioning alternatives for the rest. **Delete** tracks with the X button — if the track has notes, you'll get a confirmation dialog first.
 
-**Drag-and-drop** tracks to reorder them using the grip handle next to each track label.
+**Drag-and-drop** tracks to reorder them using the grip handle next to each track label. **Add** new tracks with the + button below the grid.
 
 ## Presets
 
-9 factory patterns with genre-accurate BPMs: Four on the Floor, Basic Rock, Hip Hop, Boom Bap (with swing), Trap, Dembow Classic, Dembow Full, Perreo, and Clear. Save your own presets via the save button in the transport bar — per-track volumes are included in saved presets. When loading a preset, the sequencer tries to keep your current samples if they match the needed zones before picking new ones.
+9 factory patterns with genre-accurate BPMs: Four on the Floor, Basic Rock, Hip Hop, Boom Bap (with swing), Trap, Dembow Classic, Dembow Full, Perreo, and Clear. Save your own presets via the save button in the transport bar — per-track volumes and bar count are included in saved presets. When loading a preset, the sequencer tries to keep your current samples if they match the needed zones before picking new ones. Old 16-step presets are automatically padded to the full grid on load.
 
 ## Zone Classification
 
