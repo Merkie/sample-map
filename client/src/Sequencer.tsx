@@ -8,6 +8,7 @@ import {
   closestCenter,
 } from "@thisbeyond/solid-dnd";
 import type { SampleNode } from "./engine";
+import { FACTORY_PRESETS } from "./presets";
 import {
   engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
   seqPlaying, setSeqPlaying, seqBpm, setSeqBpm, seqSwing, setSeqSwing,
@@ -18,73 +19,6 @@ import {
 const STEPS = 16;
 
 const ZONE_ORDER = ["kick", "snare", "hihat", "perc"] as const;
-
-// prettier-ignore
-const FACTORY_PRESETS: SavedPreset[] = [
-  {
-    id: "factory-0", name: "Four on the Floor", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false] },
-      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
-      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false] },
-      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,true,false, false,false,false,false, false,false,true,false] },
-    ],
-  },
-  {
-    id: "factory-1", name: "Basic Rock", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, true,false,true,false, false,false,false,false] },
-      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
-      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false] },
-      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true] },
-    ],
-  },
-  {
-    id: "factory-2", name: "Hip Hop", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false] },
-      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,true] },
-      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,false,true, true,false,true,false, true,false,false,true] },
-      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,true, false,false,false,false, false,false,false,true, false,false,false,false] },
-    ],
-  },
-  {
-    id: "factory-3", name: "Boom Bap", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false] },
-      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,true, false,false,false,false, true,false,false,false] },
-      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,true, true,false,true,true, true,false,true,true, true,false,true,true] },
-      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,true,false,false, false,false,false,false, false,true,false,false] },
-    ],
-  },
-  {
-    id: "factory-4", name: "Trap", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, true,false,false,true, false,false,false,false] },
-      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
-      { samplePath: "", sampleCategory: "hihat", pattern: [true,true,false,true, true,true,false,true, true,true,false,true, true,true,true,true] },
-      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,true,false, false,false,false,false, true,false,true,false] },
-    ],
-  },
-  {
-    id: "factory-5", name: "Reggaeton", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,true, false,false,true,false, false,false,false,true, false,false,true,false] },
-      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
-      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false] },
-      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true] },
-    ],
-  },
-  {
-    id: "factory-6", name: "Clear", bpm: 120, swing: 0,
-    tracks: [
-      { samplePath: "", sampleCategory: "kick",  pattern: Array(STEPS).fill(false) },
-      { samplePath: "", sampleCategory: "snare", pattern: Array(STEPS).fill(false) },
-      { samplePath: "", sampleCategory: "hihat", pattern: Array(STEPS).fill(false) },
-      { samplePath: "", sampleCategory: "perc",  pattern: Array(STEPS).fill(false) },
-    ],
-  },
-];
 const FALLBACK_TRACKS = [
   { id: "fallback-0", name: "Kick", color: "#818cf8" },
   { id: "fallback-1", name: "Snare", color: "#ef4444" },
@@ -306,7 +240,7 @@ export default function Sequencer() {
     });
   };
 
-  const handleDragEnd = ({ draggable, droppable }: { draggable: any; droppable: any }) => {
+  const handleDragEnd = ({ draggable, droppable }: { draggable: any; droppable?: any }) => {
     setActiveDragId(null);
     if (!draggable || !droppable) return;
 
