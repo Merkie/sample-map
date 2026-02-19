@@ -60,10 +60,12 @@ Bun.serve({
     // Serve sample data
     if (url.pathname === "/api/samples" && req.method === "GET") {
       try {
-        let samples = await loadOrExtract() as Array<Record<string, unknown>>;
+        let samples = (await loadOrExtract()) as Array<Record<string, unknown>>;
 
         // Filter by max duration (default 2s for one-shots)
-        const maxDuration = parseFloat(url.searchParams.get("maxDuration") ?? "2");
+        const maxDuration = parseFloat(
+          url.searchParams.get("maxDuration") ?? "1.5",
+        );
         if (maxDuration > 0 && isFinite(maxDuration)) {
           samples = samples.filter((s) => {
             const dur = s.duration as number | undefined;
@@ -75,7 +77,7 @@ Bun.serve({
         const excludeLoops = url.searchParams.get("excludeLoops") !== "false";
         if (excludeLoops) {
           samples = samples.filter((s) => {
-            const name = (s.name as string || "").toLowerCase();
+            const name = ((s.name as string) || "").toLowerCase();
             return !name.includes("loop");
           });
         }
@@ -92,7 +94,9 @@ Bun.serve({
       cachedSamples = null;
       try {
         if (existsSync(CACHE_FILE)) await Bun.write(CACHE_FILE, "");
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       try {
         const samples = await loadOrExtract();
         return Response.json(samples);
@@ -104,7 +108,9 @@ Bun.serve({
 
     // Serve audio files: /api/audio/path/to/sample.wav
     if (url.pathname.startsWith("/api/audio/") && req.method === "GET") {
-      const relPath = decodeURIComponent(url.pathname.slice("/api/audio/".length));
+      const relPath = decodeURIComponent(
+        url.pathname.slice("/api/audio/".length),
+      );
       const filePath = join(SAMPLES_DIR, relPath);
 
       // Prevent directory traversal
@@ -133,7 +139,10 @@ Bun.serve({
     // --- Static file serving (client build) ---
 
     // Try to serve static files from client/dist
-    let filePath = join(CLIENT_DIST, url.pathname === "/" ? "index.html" : url.pathname);
+    let filePath = join(
+      CLIENT_DIST,
+      url.pathname === "/" ? "index.html" : url.pathname,
+    );
     let file = Bun.file(filePath);
     if (await file.exists()) {
       return new Response(file);

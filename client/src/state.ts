@@ -16,3 +16,10 @@ export const [seqActive, setSeqActive] = createSignal(false);
 // -- Sequencer samples & armed track --
 export const [seqSamples, setSeqSamples] = createSignal<SampleNode[]>([]);
 export const [armedTrack, setArmedTrack] = createSignal(-1);
+
+// -- Sequencer transport --
+export const [seqPlaying, setSeqPlaying] = createSignal(false);
+
+// -- Debug panel --
+export const [debugActive, setDebugActive] = createSignal(false);
+export const [showZoneBorders, setShowZoneBorders] = createSignal(false);

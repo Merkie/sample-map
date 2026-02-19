@@ -1,4 +1,4 @@
-import { onMount, onCleanup, Show } from "solid-js";
+import { onMount, onCleanup, Show, createSignal, createEffect } from "solid-js";
 import { SampleMapEngine } from "./engine";
 import type { SampleNode } from "./engine";
 import Sequencer from "./Sequencer";
@@ -10,26 +10,143 @@ import {
   seqActive, setSeqActive,
   seqSamples, setSeqSamples,
   armedTrack, setArmedTrack,
+  seqPlaying, setSeqPlaying,
+  debugActive, setDebugActive,
+  showZoneBorders, setShowZoneBorders,
 } from "./state";
 
 
 const HEADER_HEIGHT = 30;
 
-/** Pick one random sample from each of up to 4 distinct categories */
+/** Pick one random sample from each preferred zone for the default drum kit */
 function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
-  const byCategory = new Map<string, SampleNode[]>();
+  const byZone = new Map<string, SampleNode[]>();
   for (const node of nodes) {
-    const list = byCategory.get(node.category) || [];
+    const list = byZone.get(node.zone) || [];
     list.push(node);
-    byCategory.set(node.category, list);
+    byZone.set(node.zone, list);
   }
 
-  // Take up to 4 categories
-  const categories = [...byCategory.keys()].slice(0, 4);
-  return categories.map((cat) => {
-    const list = byCategory.get(cat)!;
-    return list[Math.floor(Math.random() * list.length)];
+  const preferred = ["kick", "snare", "hihat", "perc"];
+  const result: SampleNode[] = [];
+  for (const zone of preferred) {
+    const list = byZone.get(zone);
+    if (list && list.length > 0) {
+      result.push(list[Math.floor(Math.random() * list.length)]);
+    }
+  }
+
+  // Fallback: if no zones matched, pick up to 4 random nodes
+  if (result.length === 0) {
+    const shuffled = [...nodes].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 4);
+  }
+
+  return result;
+}
+
+function DebugPanel() {
+  const [pos, setPos] = createSignal({ x: 16, y: 48 });
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  const onMouseDown = (e: MouseEvent) => {
+    dragging = true;
+    offsetX = e.clientX - pos().x;
+    offsetY = e.clientY - pos().y;
+    e.preventDefault();
+  };
+
+  const onMouseMove = (e: MouseEvent) => {
+    if (!dragging) return;
+    setPos({ x: e.clientX - offsetX, y: e.clientY - offsetY });
+  };
+
+  const onMouseUp = () => { dragging = false; };
+
+  onMount(() => {
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
   });
+  onCleanup(() => {
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+  });
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: `${pos().x}px`,
+        top: `${pos().y}px`,
+        "z-index": "50",
+        width: "220px",
+        background: "rgba(16,18,24,0.95)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        "border-radius": "8px",
+        "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
+        "backdrop-filter": "blur(16px)",
+        "-webkit-backdrop-filter": "blur(16px)",
+        "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        "user-select": "none",
+      }}
+    >
+      {/* Draggable header */}
+      <div
+        onMouseDown={onMouseDown}
+        style={{
+          padding: "8px 12px",
+          cursor: "grab",
+          display: "flex",
+          "align-items": "center",
+          "border-bottom": "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <span
+          style={{
+            "font-size": "0.65rem",
+            "font-weight": "600",
+            "letter-spacing": "0.08em",
+            "text-transform": "uppercase",
+            color: "rgba(255,255,255,0.5)",
+          }}
+        >
+          Debug
+        </span>
+      </div>
+      {/* Options */}
+      <div style={{ padding: "8px 12px" }}>
+        <label
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "8px",
+            cursor: "pointer",
+            "font-size": "0.7rem",
+            color: "rgba(255,255,255,0.7)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={showZoneBorders()}
+            onChange={(e) => {
+              setShowZoneBorders(e.currentTarget.checked);
+              const eng = engine();
+              if (eng) eng.showZoneBorders = e.currentTarget.checked;
+            }}
+            style={{
+              width: "14px",
+              height: "14px",
+              "accent-color": "rgba(100,225,225,1)",
+              cursor: "pointer",
+            }}
+          />
+          Show zone borders
+        </label>
+      </div>
+    </div>
+  );
 }
 
 export default function App() {
@@ -86,6 +203,11 @@ export default function App() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         engine()?.onEscape();
+        return;
+      }
+      if (e.key === " " && seqActive()) {
+        e.preventDefault();
+        setSeqPlaying(!seqPlaying());
         return;
       }
       if (e.key in opposingKey) {
@@ -218,6 +340,10 @@ export default function App() {
 
       {/* Header — absolute overlay */}
       <div
+        onClick={() => {
+          engine()?.onEscape();
+          setArmedTrack(-1);
+        }}
         style={{
           position: "absolute",
           top: "0",
@@ -276,7 +402,37 @@ export default function App() {
         >
           seq
         </button>
+
+        <button
+          onClick={() => setDebugActive(!debugActive())}
+          style={{
+            background: "none",
+            border: "none",
+            padding: "0 6px",
+            height: `${HEADER_HEIGHT}px`,
+            "font-size": "0.66rem",
+            "font-weight": "500",
+            "letter-spacing": "0.08em",
+            "text-transform": "uppercase",
+            color: debugActive() ? "rgba(100,225,225,1)" : "rgba(255,255,255,0.5)",
+            cursor: "pointer",
+            "font-family": "inherit",
+            "border-bottom": debugActive() ? "2px solid rgba(100,225,225,0.9)" : "2px solid transparent",
+            "box-shadow": "none",
+            transition: "color 0.2s, border-color 0.2s",
+            "margin-bottom": "-1px",
+            outline: "none",
+            "-webkit-tap-highlight-color": "transparent",
+          }}
+        >
+          debug
+        </button>
       </div>
+
+      {/* Debug panel */}
+      <Show when={debugActive()}>
+        <DebugPanel />
+      </Show>
 
       {/* Loading overlay */}
       <Show when={loading()}>

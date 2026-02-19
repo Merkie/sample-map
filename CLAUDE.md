@@ -8,15 +8,15 @@ Interactive audio sample similarity visualizer. Extracts audio features with Pyt
 sample-map/
   server/
     index.ts               # Bun.serve() on port 3720 (API + static files)
-    extract.py             # Python: librosa features + t-SNE → JSON
+    extract.py             # Python: librosa features + t-SNE + zone clustering → JSON
   client/src/              # SolidJS + Canvas 2D (Vite for dev)
-    state.ts               # Global singleton state (signals for engine, UI, sequencer)
-    App.tsx                # Full-viewport canvas + sequencer overlay
+    state.ts               # Global singleton state (signals for engine, UI, sequencer, debug)
+    App.tsx                # Full-viewport canvas + sequencer overlay + debug panel
     Sequencer.tsx          # Drum sequencer UI (FL Studio-style step grid)
     engine/
       index.ts             # SampleMapEngine — RAF loop, camera, audio playback
       physics.ts           # d3-force sim with neighbor links
-      renderer.ts          # Stars, sample dots, HUD
+      renderer.ts          # Stars, sample dots, zone borders, HUD
       camera.ts            # Free pan/zoom with momentum
       constants.ts         # All tunable values (physics, zoom, rendering)
       types.ts             # SampleNode interface
@@ -48,6 +48,9 @@ Contains all global signals:
 - `seqActive` — sequencer panel open/closed
 - `seqSamples` — samples assigned to sequencer tracks
 - `armedTrack` — which track is armed for sample replacement
+- `seqPlaying` — sequencer transport playing/stopped
+- `debugActive` — debug panel open/closed
+- `showZoneBorders` — toggle zone border rendering
 
 ## Key Details
 
@@ -77,6 +80,7 @@ Contains all global signals:
 - `zoomToFit()` called on initial sample load and on sequencer open/close; accounts for `engine.topMargin` (header) and `engine.bottomMargin` (sequencer)
 - `zoomToFit()` uses time-based animation (350ms) with `cubic-bezier(0.4, 0, 0.2, 1)` easing, matching the sequencer slide transition
 - `engine.resize()` guards against unnecessary canvas clears — only sets `canvas.width`/`canvas.height` when dimensions actually change
+- Zone borders (debug): convex hulls per zone, clipped against Voronoi bisectors between zone centroids to prevent overlap
 
 ### Physics (d3-force)
 
@@ -87,6 +91,17 @@ Contains all global signals:
 - Pre-settles 400 ticks before first render
 - All config in `client/src/engine/constants.ts`
 
+### Zone Classification
+
+Samples are classified into 4 instrument zones: `kick`, `snare`, `hihat`, `perc`. Classification is spatial, not threshold-based:
+
+1. After t-SNE, k-means (k=4) clusters the 2D coordinates
+2. KNN smoothing (k=7, majority vote, up to 10 passes) reassigns boundary samples so each zone is spatially contiguous — no stray outliers
+3. Bisector reconciliation: recomputes centroids from smoothed labels, then reassigns any node that's closer to another zone's centroid — guarantees every node is on the correct side of the Voronoi bisectors used for rendering
+4. Clusters are labeled by average spectral centroid: lowest → kick, next → snare, next → perc, highest → hihat
+
+The `zone` field is included in the JSON output and cached. The `SampleNode` type carries it as `zone: "kick" | "hihat" | "snare" | "perc"`.
+
 ### Drum Sequencer
 
 - Toggled via "seq" button in header; slides up from the bottom with a 350ms CSS transition (`cubic-bezier(0.4, 0, 0.2, 1)`)
@@ -95,10 +110,21 @@ Contains all global signals:
 - Each step is a rounded rectangle with a darkened notch at the top center
 - Steps alternate light/dark in groups of 4 (beat grouping)
 - Track colors: Kick = indigo (#818cf8), Snare = red (#ef4444), Hat = yellow (#eab308), Perc = green (#22c55e)
-- Transport bar: play/stop button, BPM number input, swing slider with percentage readout
-- UI only for now — no audio scheduling yet
+- Transport bar: play/stop button (also toggled via spacebar when sequencer is open), BPM number input, swing slider with percentage readout
+- Swing uses MPC 3000-style 16ths: even steps (0, 2, 4…) stay locked to the grid, odd steps (1, 3, 5…) get delayed proportionally to the swing amount. 0% = straight, 100% = max delay (~33% of a step duration, roughly triplet feel). Total pair time stays constant so tempo never drifts.
+- **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty
+- **Initial sample pick** (`pickSequencerSamples`): picks one sample from each of the preferred zones `["kick", "snare", "hihat", "perc"]` for the default 4 tracks
 - On toggle: sets `engine.bottomMargin` to sequencer height (tracked via `ResizeObserver`) and calls `zoomToFit()`, which animates the camera in sync with the slide
 - Canvas stays full-viewport; the camera zooms out and pans up to keep nodes visible above the sequencer
+- **Deselection**: clicking on the header bar or sequencer background dismisses the selection ring and disarms any armed track (same as clicking empty canvas space). Interactive sequencer elements (track labels, step cells, transport controls, add-track button) are excluded via `data-seq-interactive` attribute so their own click handlers aren't overridden
+
+### Debug Panel
+
+- Toggled via "debug" button in header
+- Floating draggable panel (drag via header bar)
+- Options:
+  - **Show zone borders**: renders dashed convex hull borders per zone with color-coded labels (kick=red, snare=blue, hihat=green, perc=yellow). Borders are clipped against Voronoi bisectors (with 8-unit margin for d3-force drift) so zones never overlap.
+- State: `debugActive` and `showZoneBorders` signals in `state.ts`; `engine.showZoneBorders` boolean drives rendering
 
 ### Audio Playback
 
@@ -112,7 +138,8 @@ Contains all global signals:
 - Discovers .wav/.mp3 recursively in samples dir
 - Per-file: duration, RMS, ZCR, spectral centroid/bandwidth/rolloff, 13 MFCCs
 - StandardScaler normalization → t-SNE (perplexity=min(30, n-1))
-- Outputs JSON with: name, relativePath, category, duration, x, y
+- k-means (k=4) on t-SNE coords → KNN smoothing → zone labels
+- Outputs JSON with: name, relativePath, category, zone, duration, x, y
 
 ## Dependencies
 

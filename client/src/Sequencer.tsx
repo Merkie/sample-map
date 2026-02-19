@@ -1,7 +1,7 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, untrack } from "solid-js";
 import { Dices, Library, Plus } from "lucide-solid";
 import type { SampleNode } from "./engine";
-import { engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack } from "./state";
+import { engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack, seqPlaying, setSeqPlaying } from "./state";
 
 const STEPS = 16;
 
@@ -87,7 +87,6 @@ export default function Sequencer() {
   const [grid, setGrid] = createSignal(
     Array.from({ length: 4 }, () => Array(STEPS).fill(false) as boolean[]),
   );
-  const [playing, setPlaying] = createSignal(false);
   const [bpm, setBpm] = createSignal(120);
   const [swing, setSwing] = createSignal(0);
   const [currentStep, setCurrentStep] = createSignal(-1);
@@ -129,7 +128,7 @@ export default function Sequencer() {
   };
 
   createEffect(() => {
-    if (playing()) {
+    if (seqPlaying()) {
       let step = 0;
       setCurrentStep(0);
 
@@ -184,6 +183,12 @@ export default function Sequencer() {
 
   return (
     <div
+      onClick={(e) => {
+        if (e.target === e.currentTarget || !(e.target as HTMLElement).closest?.("[data-seq-interactive]")) {
+          engine()?.onEscape();
+          setArmedTrack(-1);
+        }
+      }}
       style={{
         "flex-shrink": "0",
         background: "linear-gradient(180deg, rgba(16,18,24,0.96) 0%, rgba(10,12,16,0.98) 100%)",
@@ -212,16 +217,16 @@ export default function Sequencer() {
       >
         {/* Play / Stop */}
         <button
-          onClick={() => setPlaying(!playing())}
+          onClick={() => setSeqPlaying(!seqPlaying())}
           style={{
             width: "28px",
             height: "28px",
             border: "1px solid rgba(255,255,255,0.12)",
             "border-radius": "6px",
-            background: playing()
+            background: seqPlaying()
               ? "rgba(100,225,225,0.12)"
               : "rgba(255,255,255,0.04)",
-            color: playing() ? "rgba(100,225,225,1)" : "rgba(255,255,255,0.6)",
+            color: seqPlaying() ? "rgba(100,225,225,1)" : "rgba(255,255,255,0.6)",
             cursor: "pointer",
             display: "flex",
             "align-items": "center",
@@ -231,7 +236,7 @@ export default function Sequencer() {
             transition: "all 0.15s",
           }}
         >
-          {playing() ? (
+          {seqPlaying() ? (
             /* Stop icon */
             <div
               style={{
@@ -341,12 +346,12 @@ export default function Sequencer() {
           onClick={() => {
             const eng = engine();
             if (!eng) return;
-            const count = seqSamples().length;
-            const pool = [...eng.nodes];
+            const current = seqSamples();
             const next: SampleNode[] = [];
-            for (let i = 0; i < count && pool.length > 0; i++) {
-              const idx = Math.floor(Math.random() * pool.length);
-              next.push(pool.splice(idx, 1)[0]);
+            for (const sample of current) {
+              const zonePool = eng.nodes.filter((n) => n.zone === sample.zone && n.id !== sample.id);
+              const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => n.id !== sample.id);
+              next.push(pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : sample);
             }
             setSeqSamples(next);
             eng.highlightedNodeIds = new Set(next.map((s) => s.id));
@@ -476,6 +481,7 @@ export default function Sequencer() {
             <div style={{ display: "flex", "align-items": "center", gap: "6px" }}>
               {/* Track label */}
               <div
+                data-seq-interactive
                 onClick={() => {
                   const idx = rowIdx();
                   if (armedTrack() === idx) {
@@ -582,6 +588,7 @@ export default function Sequencer() {
 
         {/* Add track button */}
         <div
+          data-seq-interactive
           onClick={() => {
             const eng = engine();
             if (!eng || eng.nodes.length === 0) return;

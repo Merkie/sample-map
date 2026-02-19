@@ -3,6 +3,7 @@ export interface SampleNode {
   name: string;
   relativePath: string;
   category: string;
+  zone: "kick" | "hihat" | "snare" | "perc";
   color: string;
 
   // t-SNE target positions (scaled to world units)

@@ -5,7 +5,7 @@ import type { SampleNode } from "./types";
 import type { Camera } from "./camera";
 import { updateFreeCamera } from "./camera";
 import { createSimulation, preSettle, tickSimulation, syncFromSimulation, stopSimulation } from "./physics";
-import { renderStars, renderSamples, renderSequencerPolygon, renderSelectionRing, renderHUD } from "./renderer";
+import { renderStars, renderSamples, renderSequencerPolygon, renderSelectionRing, renderZoneBorders, renderHUD } from "./renderer";
 import { createSelectionRing, selectNode, dismissRing, updateSelectionRing } from "./selection-ring";
 import {
   TSNE_SCALE,
@@ -93,6 +93,9 @@ export class SampleMapEngine {
   // Sequencer dimming: when set, only these nodes render at full brightness
   highlightedNodeIds: Set<string> | null = null;
 
+  // Debug: draw zone borders
+  showZoneBorders = false;
+
   // Animated polygon vertices (world space, lerped toward target nodes)
   private polygonVertices: Array<{ x: number; y: number }> = [];
   private polygonTargetIds: string[] = [];
@@ -166,7 +169,7 @@ export class SampleMapEngine {
 
   // ===== Data Loading =====
 
-  loadSamples(rawSamples: Array<{ name: string; relativePath: string; category: string; x: number; y: number }>) {
+  loadSamples(rawSamples: Array<{ name: string; relativePath: string; category: string; zone?: string; x: number; y: number }>) {
     // Find t-SNE range for normalization
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     for (const s of rawSamples) {
@@ -198,6 +201,7 @@ export class SampleMapEngine {
         name: s.name,
         relativePath: s.relativePath,
         category: s.category,
+        zone: (s.zone ?? "perc") as SampleNode["zone"],
         color,
         tsneX,
         tsneY,
@@ -820,6 +824,9 @@ export class SampleMapEngine {
     const wts = this.worldToScreen.bind(this);
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
     renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts, this.highlightedNodeIds ?? undefined);
+    if (this.showZoneBorders) {
+      renderZoneBorders(ctx, this.nodes, wts, this.camera.zoom);
+    }
     renderSequencerPolygon(ctx, this.polygonVertices, wts);
     renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
     renderHUD(ctx, this.width, this.height, this.nodes.length, this.hoveredNode, this.selectionRing.node);
