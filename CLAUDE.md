@@ -124,7 +124,8 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty. Accumulates `usedIds` to prevent duplicates across tracks. **Respects track locks** — locked tracks keep their current sample during randomize
 - **Track labels**: flex column layout — sample name on top (0.72rem, clickable to arm), grip handle + lock button below. Width 100px for better readability
 - **Track locking**: per-track lock button (Lock/LockOpen icons) prevents randomize from changing that track's sample. Lock state is component-local (`lockedTracks` boolean array), NOT saved in presets. Loading a preset resets all locks to unlocked
-- **Track reordering**: drag-and-drop via `@thisbeyond/solid-dnd` (`SortableProvider` + `createSortable`). Grip handle (GripVertical icon) indicates drag affordance. On reorder, `seqSamples`, `grid`, and `lockedTracks` arrays are reordered in parallel; armed track index is adjusted
+- **Per-track volume**: vertical fader (20px-wide rotated `<input type="range">`) to the left of each track label. Component-local `trackVolumes` signal (`number[]`, default 1.0 per track). Passed as 3rd arg to `engine.playSample()` which scales gain (`0.6 * volume`). Reordered in parallel with other track arrays on drag. Persisted in presets as `track.volume` (optional, defaults to 1.0 for backward compat). Loading a preset restores volumes; factory presets (no volume field) load at 100%
+- **Track reordering**: drag-and-drop via `@thisbeyond/solid-dnd` (`SortableProvider` + `createSortable`). Grip handle (GripVertical icon) indicates drag affordance. On reorder, `seqSamples`, `grid`, `lockedTracks`, and `trackVolumes` arrays are reordered in parallel; armed track index is adjusted
 - **Initial sample pick** (`pickSequencerSamples`): picks one sample from each of the preferred zones `["kick", "snare", "hihat", "perc"]` for the default 4 tracks
 - On toggle: sets `engine.bottomMargin` to sequencer height (tracked via `ResizeObserver`) and calls `zoomToFit()`, which animates the camera in sync with the slide
 - Canvas stays full-viewport; the camera zooms out and pans up to keep nodes visible above the sequencer
@@ -136,7 +137,7 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - **Factory presets**: 9 built-in patterns stored as `FACTORY_PRESETS: SavedPreset[]` in `presets.ts`. Each has `samplePath: ""` so they always trigger adaptation. Patterns with genre-accurate BPMs:
   - Four on the Floor (120), Basic Rock (120), Hip Hop (90), Boom Bap (90, 45% swing), Trap (140), Dembow Classic (98), Dembow Full (98), Perreo (100), Clear (120)
 - **User presets**: saved to `localStorage` (key: `"sample-map-presets"`), loaded on startup
-- **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, tracks: [{ samplePath, sampleCategory, pattern }] }`
+- **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, tracks: [{ samplePath, sampleCategory, pattern, volume? }] }`
 - **Loading flow**: `handleLoadPreset()` checks if all `samplePath` values match loaded nodes. If all match → `applyPreset(preset, false)` (exact). If any missing → shows adaptation modal
 - **Adaptation modal** (`App.tsx`): glassmorphism overlay explaining samples will be zone-matched. "Load with My Samples" calls `applyPreset(preset, true)` which picks zone-matched replacements
 - **Sample reuse on load**: when loading a preset (adapt or exact), `applyPreset` tries to reuse the user's current samples before picking random ones. Resolution order: exact path match → current sample from matching zone → random zone pick
@@ -156,6 +157,7 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 ### Audio Playback
 
 - Web Audio API, polyphonic (up to 8 simultaneous voices)
+- `playSample(node, force?, volume?)` — `volume` (0–1, default 1.0) scales the base gain of 0.6
 - Samples play to completion — moving across the blob layers sounds
 - AudioBuffers cached after first fetch
 - Requires user interaction to start (browser AudioContext policy)

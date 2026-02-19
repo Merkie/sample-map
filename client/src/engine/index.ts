@@ -547,7 +547,7 @@ export class SampleMapEngine {
     return this.audioCtx;
   }
 
-  async playSample(node: SampleNode, force = false) {
+  async playSample(node: SampleNode, force = false, volume = 1.0) {
     const ctx = this.ensureAudioCtx();
     const url = `/api/audio/${encodeURIComponent(node.relativePath)}`;
 
@@ -585,7 +585,7 @@ export class SampleMapEngine {
 
     const gain = ctx.createGain();
     gain.gain.value = 0;
-    gain.gain.linearRampToValueAtTime(0.6, ctx.currentTime + 0.02);
+    gain.gain.linearRampToValueAtTime(0.6 * volume, ctx.currentTime + 0.02);
 
     source.connect(gain);
     gain.connect(ctx.destination);

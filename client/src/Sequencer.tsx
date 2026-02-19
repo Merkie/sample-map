@@ -41,6 +41,9 @@ export default function Sequencer() {
   const [lockedTracks, setLockedTracks] = createSignal<boolean[]>(
     Array.from({ length: 4 }, () => false),
   );
+  const [trackVolumes, setTrackVolumes] = createSignal<number[]>(
+    Array.from({ length: 4 }, () => 1.0),
+  );
   const [activeDragId, setActiveDragId] = createSignal<string | number | null>(null);
   const sortableIds = createMemo(() => tracks().map((t) => t.id));
 
@@ -89,6 +92,7 @@ export default function Sequencer() {
       setSeqBpm(preset.bpm);
       setSeqSwing(preset.swing);
       setLockedTracks(Array.from({ length: resolvedSamples.length }, () => false));
+      setTrackVolumes(preset.tracks.map((t) => t.volume ?? 1.0));
       eng.highlightedNodeIds = new Set(resolvedSamples.map((s) => s.id));
     }
     setShowPresets(false);
@@ -136,6 +140,7 @@ export default function Sequencer() {
         samplePath: s.relativePath,
         sampleCategory: s.zone,
         pattern: [...(g[i] || Array(STEPS).fill(false))],
+        volume: trackVolumes()[i] ?? 1.0,
       })),
     };
 
@@ -177,6 +182,18 @@ export default function Sequencer() {
     });
   });
 
+  // Sync track volumes length with track count
+  createEffect(() => {
+    const needed = tracks().length;
+    setTrackVolumes((prev) => {
+      if (prev.length === needed) return prev;
+      if (prev.length > needed) return prev.slice(0, needed);
+      const next = [...prev];
+      while (next.length < needed) next.push(1.0);
+      return next;
+    });
+  });
+
   // Scheduler
   let timerId: ReturnType<typeof setTimeout> | null = null;
 
@@ -200,10 +217,11 @@ export default function Sequencer() {
 
         // Trigger samples for active cells
         const samples = untrack(seqSamples);
+        const volumes = untrack(trackVolumes);
         for (let row = 0; row < g.length; row++) {
           if (g[row][step] && samples[row]) {
             samples[row].glow = 1;
-            engine()?.playSample(samples[row], true);
+            engine()?.playSample(samples[row], true, volumes[row] ?? 1.0);
           }
         }
         setCurrentStep(step);
@@ -260,6 +278,7 @@ export default function Sequencer() {
     setSeqSamples(reorder);
     setGrid((prev) => reorder(prev));
     setLockedTracks((prev) => reorder(prev));
+    setTrackVolumes((prev) => reorder(prev));
 
     // Adjust armed track index
     const armed = armedTrack();
@@ -771,6 +790,49 @@ export default function Sequencer() {
                       opacity: activeDragId() === track.id ? "0.4" : "1",
                     }}
                   >
+                    {/* Volume fader */}
+                    <div
+                      data-seq-interactive
+                      style={{
+                        width: "20px",
+                        height: "48px",
+                        "flex-shrink": "0",
+                        display: "flex",
+                        "align-items": "center",
+                        "justify-content": "center",
+                        position: "relative",
+                      }}
+                    >
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={Math.round(trackVolumes()[rowIdx()] * 100)}
+                        onInput={(e) => {
+                          const idx = rowIdx();
+                          const val = parseInt(e.currentTarget.value) / 100;
+                          setTrackVolumes((prev) => {
+                            const next = [...prev];
+                            next[idx] = val;
+                            return next;
+                          });
+                        }}
+                        style={{
+                          width: "40px",
+                          height: "4px",
+                          "-webkit-appearance": "none",
+                          appearance: "none",
+                          background: `linear-gradient(to right, ${track.color} ${Math.round(trackVolumes()[rowIdx()] * 100)}%, rgba(255,255,255,0.08) ${Math.round(trackVolumes()[rowIdx()] * 100)}%)`,
+                          "border-radius": "2px",
+                          outline: "none",
+                          cursor: "pointer",
+                          transform: "rotate(-90deg)",
+                          "transform-origin": "center center",
+                        }}
+                        title={`Volume: ${Math.round(trackVolumes()[rowIdx()] * 100)}%`}
+                      />
+                    </div>
+
                     {/* Track label — flex column: name + buttons */}
                     <div
                       data-seq-interactive

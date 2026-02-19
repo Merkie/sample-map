@@ -37,6 +37,7 @@ export interface SavedPreset {
     samplePath: string;       // relativePath ("" for factory)
     sampleCategory: string;   // zone: kick/snare/hihat/perc
     pattern: boolean[];       // 16 steps
+    volume?: number;          // 0–1, defaults to 1.0
   }[];
 }
 
