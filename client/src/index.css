@@ -10,6 +10,7 @@ html, body {
   touch-action: none;
   overflow: hidden;
   -webkit-text-size-adjust: 100%;
+  background: #000408;
 }
 
 body {
