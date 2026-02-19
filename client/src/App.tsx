@@ -394,11 +394,17 @@ export default function App() {
   const toggleSeq = () => {
     const next = !seqActive();
     setSeqActive(next);
+    if (!next) {
+      setSeqPlaying(false);
+    }
     const eng = engine();
     if (eng) {
       eng.highlightedNodeIds = next
         ? new Set(seqSamples().map((s) => s.id))
         : null;
+      if (!next) {
+        eng.scatterCircles = [];
+      }
       eng.bottomMargin = next ? seqHeight : 0;
       eng.zoomToFit();
     }
