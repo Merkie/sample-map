@@ -612,7 +612,10 @@ export default function Sequencer() {
                 return (
                   <>
                   <Show when={rowIdx() > 0}>
-                    <div class="w-full shrink-0 relative z-[3]" style={{ height: "3px", background: "#101218" }} />
+                    <div class="flex shrink-0 relative z-[3]" style={{ height: "3px" }}>
+                      <div class="sticky left-0 z-[2] shrink-0 border-r border-white/[0.06]" style={{ width: "149px", background: "#0a0c10" }} />
+                      <div class="flex-1" style={{ background: "#0a0c10" }} />
+                    </div>
                   </Show>
                   <div
                     ref={sortable.ref}
