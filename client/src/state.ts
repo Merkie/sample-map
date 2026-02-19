@@ -38,6 +38,8 @@ export interface SavedPreset {
     sampleCategory: string;   // zone: kick/snare/hihat/perc
     pattern: boolean[];       // 16 steps
     volume?: number;          // 0–1, defaults to 1.0
+    scatter?: boolean;        // scatter mode enabled (defaults false)
+    scatterRadius?: number;   // scatter radius in world units (defaults 30)
   }[];
 }
 

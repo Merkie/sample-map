@@ -1,5 +1,5 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show, untrack } from "solid-js";
-import { Dices, GripVertical, Library, Lock, LockOpen, Plus, Save } from "lucide-solid";
+import { CircleDashed, CircleDotDashed, Dices, GripVertical, Library, Lock, LockOpen, Plus, Save } from "lucide-solid";
 import {
   DragDropProvider,
   DragDropSensors,
@@ -45,6 +45,13 @@ export default function Sequencer() {
     Array.from({ length: 4 }, () => 1.0),
   );
   const [activeDragId, setActiveDragId] = createSignal<string | number | null>(null);
+  const [scatterEnabled, setScatterEnabled] = createSignal<boolean[]>(
+    Array.from({ length: 4 }, () => false),
+  );
+  const [scatterRadius, setScatterRadius] = createSignal<number[]>(
+    Array.from({ length: 4 }, () => 30),
+  );
+  const [scatterPopupTrack, setScatterPopupTrack] = createSignal(-1);
   const sortableIds = createMemo(() => tracks().map((t) => t.id));
 
   /** Apply a preset: resolve samples by path or zone, set grid/bpm/swing */
@@ -93,6 +100,8 @@ export default function Sequencer() {
       setSeqSwing(preset.swing);
       setLockedTracks(Array.from({ length: resolvedSamples.length }, () => false));
       setTrackVolumes(preset.tracks.map((t) => t.volume ?? 1.0));
+      setScatterEnabled(preset.tracks.map((t) => t.scatter ?? false));
+      setScatterRadius(preset.tracks.map((t) => t.scatterRadius ?? 30));
       eng.highlightedNodeIds = new Set(resolvedSamples.map((s) => s.id));
     }
     setShowPresets(false);
@@ -141,6 +150,8 @@ export default function Sequencer() {
         sampleCategory: s.zone,
         pattern: [...(g[i] || Array(STEPS).fill(false))],
         volume: trackVolumes()[i] ?? 1.0,
+        scatter: scatterEnabled()[i] ?? false,
+        scatterRadius: scatterRadius()[i] ?? 30,
       })),
     };
 
@@ -194,6 +205,46 @@ export default function Sequencer() {
     });
   });
 
+  // Sync scatter enabled length with track count
+  createEffect(() => {
+    const needed = tracks().length;
+    setScatterEnabled((prev) => {
+      if (prev.length === needed) return prev;
+      if (prev.length > needed) return prev.slice(0, needed);
+      const next = [...prev];
+      while (next.length < needed) next.push(false);
+      return next;
+    });
+  });
+
+  // Sync scatter radius length with track count
+  createEffect(() => {
+    const needed = tracks().length;
+    setScatterRadius((prev) => {
+      if (prev.length === needed) return prev;
+      if (prev.length > needed) return prev.slice(0, needed);
+      const next = [...prev];
+      while (next.length < needed) next.push(30);
+      return next;
+    });
+  });
+
+  // Sync engine scatter circles from scatter state
+  createEffect(() => {
+    const eng = engine();
+    if (!eng) return;
+    const samples = seqSamples();
+    const enabled = scatterEnabled();
+    const radii = scatterRadius();
+    const circles: Array<{ nodeId: string; radius: number }> = [];
+    for (let i = 0; i < samples.length; i++) {
+      if (enabled[i] && samples[i]) {
+        circles.push({ nodeId: samples[i].id, radius: radii[i] ?? 30 });
+      }
+    }
+    eng.scatterCircles = circles;
+  });
+
   // Scheduler
   let timerId: ReturnType<typeof setTimeout> | null = null;
 
@@ -218,10 +269,20 @@ export default function Sequencer() {
         // Trigger samples for active cells
         const samples = untrack(seqSamples);
         const volumes = untrack(trackVolumes);
+        const scatter = untrack(scatterEnabled);
+        const radii = untrack(scatterRadius);
+        const eng = engine();
         for (let row = 0; row < g.length; row++) {
           if (g[row][step] && samples[row]) {
-            samples[row].glow = 1;
-            engine()?.playSample(samples[row], true, volumes[row] ?? 1.0);
+            let target = samples[row];
+            if (scatter[row] && eng) {
+              const nearby = eng.getNodesInRadius(samples[row], radii[row] ?? 30);
+              if (nearby.length > 0) {
+                target = nearby[Math.floor(Math.random() * nearby.length)];
+              }
+            }
+            target.glow = 1;
+            eng?.playSample(target, true, volumes[row] ?? 1.0);
           }
         }
         setCurrentStep(step);
@@ -279,6 +340,8 @@ export default function Sequencer() {
     setGrid((prev) => reorder(prev));
     setLockedTracks((prev) => reorder(prev));
     setTrackVolumes((prev) => reorder(prev));
+    setScatterEnabled((prev) => reorder(prev));
+    setScatterRadius((prev) => reorder(prev));
 
     // Adjust armed track index
     const armed = armedTrack();
@@ -782,7 +845,7 @@ export default function Sequencer() {
                 const sortable = createSortable(track.id);
                 return (
                   <div
-                    ref={(el: HTMLElement) => sortable(el)}
+                    ref={sortable.ref}
                     style={{
                       display: "flex",
                       "align-items": "center",
@@ -882,6 +945,7 @@ export default function Sequencer() {
                         {/* Grip handle */}
                         <div
                           data-seq-interactive
+                          {...sortable.dragActivators}
                           style={{
                             color: "rgba(255,255,255,0.25)",
                             cursor: "grab",
@@ -922,6 +986,106 @@ export default function Sequencer() {
                           title={lockedTracks()[rowIdx()] ? "Unlock track (allow randomize)" : "Lock track (prevent randomize)"}
                         >
                           {lockedTracks()[rowIdx()] ? <Lock size={10} /> : <LockOpen size={10} />}
+                        </div>
+
+                        {/* Scatter toggle */}
+                        <div
+                          data-seq-interactive
+                          style={{ position: "relative", "z-index": scatterPopupTrack() === rowIdx() ? "50" : undefined }}
+                          onMouseEnter={() => setScatterPopupTrack(rowIdx())}
+                          onMouseLeave={() => setScatterPopupTrack(-1)}
+                        >
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const idx = rowIdx();
+                              setScatterEnabled((prev) => {
+                                const next = [...prev];
+                                next[idx] = !next[idx];
+                                return next;
+                              });
+                            }}
+                            style={{
+                              color: scatterEnabled()[rowIdx()]
+                                ? "rgba(45, 212, 191, 0.9)"
+                                : "rgba(255,255,255,0.2)",
+                              cursor: "pointer",
+                              display: "flex",
+                              "align-items": "center",
+                              padding: "1px",
+                              "border-radius": "2px",
+                              transition: "color 0.15s",
+                            }}
+                            title={scatterEnabled()[rowIdx()] ? "Disable scatter" : "Enable scatter"}
+                          >
+                            {scatterEnabled()[rowIdx()] ? <CircleDotDashed size={10} /> : <CircleDashed size={10} />}
+                          </div>
+
+                          {/* Scatter radius popup (on hover) */}
+                          <Show when={scatterPopupTrack() === rowIdx()}>
+                            <div
+                              style={{
+                                position: "absolute",
+                                top: "100%",
+                                left: "50%",
+                                transform: "translateX(-50%)",
+                                "padding-top": "6px",
+                              }}
+                            >
+                            <div
+                              style={{
+                                background: "rgb(20,22,28)",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                "border-radius": "6px",
+                                "box-shadow": "0 6px 24px rgba(0,0,0,0.8)",
+                                padding: "5px 8px",
+                                "z-index": "100",
+                                display: "flex",
+                                "align-items": "center",
+                                gap: "6px",
+                                "white-space": "nowrap",
+                              }}
+                            >
+                              <input
+                                data-seq-interactive
+                                type="range"
+                                min={10}
+                                max={100}
+                                value={scatterRadius()[rowIdx()]}
+                                onInput={(e) => {
+                                  const idx = rowIdx();
+                                  const val = parseInt(e.currentTarget.value);
+                                  setScatterRadius((prev) => {
+                                    const next = [...prev];
+                                    next[idx] = val;
+                                    return next;
+                                  });
+                                }}
+                                style={{
+                                  width: "56px",
+                                  height: "3px",
+                                  "-webkit-appearance": "none",
+                                  appearance: "none",
+                                  background: `linear-gradient(to right, rgba(45,212,191,0.5) ${((scatterRadius()[rowIdx()] - 10) / 90) * 100}%, rgba(255,255,255,0.08) ${((scatterRadius()[rowIdx()] - 10) / 90) * 100}%)`,
+                                  "border-radius": "2px",
+                                  outline: "none",
+                                  cursor: "pointer",
+                                }}
+                              />
+                              <span
+                                style={{
+                                  "font-size": "0.55rem",
+                                  "font-family": "monospace",
+                                  color: "rgba(255,255,255,0.45)",
+                                  "min-width": "18px",
+                                  "text-align": "right",
+                                }}
+                              >
+                                {scatterRadius()[rowIdx()]}
+                              </span>
+                            </div>
+                            </div>
+                          </Show>
                         </div>
                       </div>
                     </div>

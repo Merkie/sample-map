@@ -200,6 +200,45 @@ export function renderSelectionRing(
   ctx.stroke();
 }
 
+export function renderScatterCircles(
+  ctx: CanvasRenderingContext2D,
+  circles: Array<{ nodeId: string; radius: number }>,
+  nodes: SampleNode[],
+  worldToScreen: WorldToScreen,
+  zoom: number,
+  time: number,
+): void {
+  if (circles.length === 0) return;
+
+  const nodeMap = new Map<string, SampleNode>();
+  for (const node of nodes) nodeMap.set(node.id, node);
+
+  const cappedZoom = Math.min(zoom, 1.2);
+
+  ctx.save();
+  for (const circle of circles) {
+    const node = nodeMap.get(circle.nodeId);
+    if (!node) continue;
+
+    const [sx, sy] = worldToScreen(node.x, node.y);
+    const screenRadius = circle.radius * cappedZoom;
+
+    // Faint fill
+    ctx.beginPath();
+    ctx.arc(sx, sy, screenRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 255, 255, 0.03)";
+    ctx.fill();
+
+    // Solid stroke
+    ctx.beginPath();
+    ctx.arc(sx, sy, screenRadius, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 const ZONE_COLORS: Record<string, string> = {
   kick: "#ef4444",
   hihat: "#22c55e",

@@ -5,7 +5,7 @@ import type { SampleNode } from "./types";
 import type { Camera } from "./camera";
 import { updateFreeCamera } from "./camera";
 import { createSimulation, preSettle, tickSimulation, syncFromSimulation, stopSimulation } from "./physics";
-import { renderStars, renderSamples, renderSequencerPolygon, renderSelectionRing, renderZoneBorders, renderHUD } from "./renderer";
+import { renderStars, renderSamples, renderScatterCircles, renderSequencerPolygon, renderSelectionRing, renderZoneBorders, renderHUD } from "./renderer";
 import { createSelectionRing, selectNode, dismissRing, updateSelectionRing } from "./selection-ring";
 import {
   TSNE_SCALE,
@@ -101,6 +101,9 @@ export class SampleMapEngine {
 
   // Duplicate prevention: nodes to exclude from arrow-key navigation
   excludeNodeIds: Set<string> | null = null;
+
+  // Scatter circles: rendered as dashed circles around sample nodes
+  scatterCircles: Array<{ nodeId: string; radius: number }> = [];
 
   // Animated polygon vertices (world space, lerped toward target nodes)
   private polygonVertices: Array<{ x: number; y: number }> = [];
@@ -261,6 +264,7 @@ export class SampleMapEngine {
     this.followTarget = null;
     this.polygonVertices = [];
     this.polygonTargetIds = [];
+    this.scatterCircles = [];
   }
 
   private stopAllAudio() {
@@ -508,6 +512,18 @@ export class SampleMapEngine {
     selectNode(this.selectionRing, node);
     this.playRingSelection(node);
     this.followTarget = { x: node.x, y: node.y };
+  }
+
+  /** Return all nodes within a given world-space radius of the center node */
+  getNodesInRadius(center: SampleNode, radius: number): SampleNode[] {
+    const r2 = radius * radius;
+    const result: SampleNode[] = [];
+    for (const node of this.nodes) {
+      const dx = node.x - center.x;
+      const dy = node.y - center.y;
+      if (dx * dx + dy * dy <= r2) result.push(node);
+    }
+    return result;
   }
 
   /** Toggle d3-force physics on/off. When off, nodes snap to raw t-SNE positions. */
@@ -852,6 +868,7 @@ export class SampleMapEngine {
     const wts = this.worldToScreen.bind(this);
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
     renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts, this.highlightedNodeIds ?? undefined);
+    renderScatterCircles(ctx, this.scatterCircles, this.nodes, wts, this.camera.zoom, this.time);
     if (this.showZoneBorders) {
       renderZoneBorders(ctx, this.nodes, wts, this.camera.zoom);
     }
