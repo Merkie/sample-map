@@ -504,14 +504,15 @@ export default function App() {
         <div
           onClick={() => {
             if (overlayDismissing()) return;
-            const eng = engine();
-            if (eng) {
-              eng.ensureAudioCtx();
-            }
             setAudioUnlocked(true);
             setOverlayDismissing(true);
-            setTimeout(() => setOverlayGone(true), 500);
+            // Defer AudioContext init so it doesn't block the animation's first frame
+            requestAnimationFrame(() => {
+              const eng = engine();
+              if (eng) eng.ensureAudioCtx();
+            });
           }}
+          onAnimationEnd={() => setOverlayGone(true)}
           class={cn(
             "absolute inset-0 flex flex-col items-center justify-center z-10 cursor-pointer",
             overlayDismissing() && "woosh-out",
