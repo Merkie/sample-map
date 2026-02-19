@@ -17,6 +17,7 @@ import {
   setPresets,
   showAdaptModal, setShowAdaptModal,
   applyPresetFn,
+  resetSeqTracks,
 } from "./state";
 
 
@@ -194,7 +195,7 @@ function DebugPanel() {
                 eng.loadSamples(samples);
                 eng.zoomToFit();
                 setSampleCount(samples.length);
-                setSeqSamples(pickSequencerSamples(eng.nodes));
+                resetSeqTracks(pickSequencerSamples(eng.nodes));
               }
             } catch (err) {
               console.error("Sample refresh failed:", err);
@@ -371,7 +372,7 @@ export default function App() {
       eng.start();
       // Pick sequencer samples once on first load
       if (seqSamples().length === 0) {
-        setSeqSamples(pickSequencerSamples(eng.nodes));
+        resetSeqTracks(pickSequencerSamples(eng.nodes));
       }
       setLoading(false);
       // Fetch user presets (non-blocking, non-critical)

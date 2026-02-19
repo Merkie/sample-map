@@ -51,12 +51,22 @@ Contains all global signals:
 - `armedTrack` — which track is armed for sample replacement
 - `seqPlaying` — sequencer transport playing/stopped
 - `seqBpm`, `seqSwing` — sequencer BPM and swing amount (global for preset save/load)
+- `seqGrid` — 2D boolean array of step patterns (rows × 16 steps)
+- `seqStep` — current playback step index (-1 when stopped)
+- `seqLockedTracks` — per-track lock flags (prevent randomize)
+- `seqTrackVolumes` — per-track volume levels (0–1)
+- `seqScatterEnabled` — per-track scatter mode toggle
+- `seqScatterRadius` — per-track scatter radius in world units
 - `debugActive` — debug panel open/closed
 - `showZoneBorders` — toggle zone border rendering
 - `physicsEnabled` — toggle d3-force physics on/off (default true)
 - `presets` — user-saved presets loaded from server (`SavedPreset[]`)
 - `showAdaptModal` — controls the adaptation modal when loading presets with missing samples
 - `applyPresetFn` — callback signal set by Sequencer, used by adaptation modal to apply presets
+
+Coordinated update functions (replace signal-to-signal sync effects):
+- `resetSeqTracks(samples)` — atomically resets seqSamples + all parallel arrays (grid, locks, volumes, scatter)
+- `addSeqTrack(sample)` — appends one track to seqSamples + all parallel arrays
 
 ## Key Details
 
@@ -123,8 +133,8 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Swing uses MPC 3000-style 16ths: even steps (0, 2, 4…) stay locked to the grid, odd steps (1, 3, 5…) get delayed proportionally to the swing amount. 0% = straight, 100% = max delay (~33% of a step duration, roughly triplet feel). Total pair time stays constant so tempo never drifts.
 - **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty. Accumulates `usedIds` to prevent duplicates across tracks. **Respects track locks** — locked tracks keep their current sample during randomize
 - **Track labels**: flex column layout — sample name on top (0.72rem, clickable to arm), grip handle + lock button below. Width 100px for better readability
-- **Track locking**: per-track lock button (Lock/LockOpen icons) prevents randomize from changing that track's sample. Lock state is component-local (`lockedTracks` boolean array), NOT saved in presets. Loading a preset resets all locks to unlocked
-- **Per-track volume**: vertical fader (20px-wide rotated `<input type="range">`) to the left of each track label. Component-local `trackVolumes` signal (`number[]`, default 1.0 per track). Passed as 3rd arg to `engine.playSample()` which scales gain (`0.6 * volume`). Reordered in parallel with other track arrays on drag. Persisted in presets as `track.volume` (optional, defaults to 1.0 for backward compat). Loading a preset restores volumes; factory presets (no volume field) load at 100%
+- **Track locking**: per-track lock button (Lock/LockOpen icons) prevents randomize from changing that track's sample. Lock state is global (`seqLockedTracks` in state.ts), NOT saved in presets. Loading a preset resets all locks to unlocked
+- **Per-track volume**: vertical fader (20px-wide rotated `<input type="range">`) to the left of each track label. Global `seqTrackVolumes` signal (`number[]`, default 1.0 per track) in state.ts. Passed as 3rd arg to `engine.playSample()` which scales gain (`0.6 * volume`). Reordered in parallel with other track arrays on drag. Persisted in presets as `track.volume` (optional, defaults to 1.0 for backward compat). Loading a preset restores volumes; factory presets (no volume field) load at 100%
 - **Track reordering**: drag-and-drop via `@thisbeyond/solid-dnd` (`SortableProvider` + `createSortable`). Grip handle (GripVertical icon) indicates drag affordance. On reorder, `seqSamples`, `grid`, `lockedTracks`, and `trackVolumes` arrays are reordered in parallel; armed track index is adjusted
 - **Initial sample pick** (`pickSequencerSamples`): picks one sample from each of the preferred zones `["kick", "snare", "hihat", "perc"]` for the default 4 tracks
 - On toggle: sets `engine.bottomMargin` to sequencer height (tracked via `ResizeObserver`) and calls `zoomToFit()`, which animates the camera in sync with the slide

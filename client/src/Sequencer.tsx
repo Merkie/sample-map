@@ -6,17 +6,23 @@ import {
   SortableProvider,
   createSortable,
   closestCenter,
+  transformStyle,
 } from "@thisbeyond/solid-dnd";
 import type { SampleNode } from "./engine";
 import { FACTORY_PRESETS } from "./presets";
 import {
+  STEPS,
   engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
   seqPlaying, setSeqPlaying, seqBpm, setSeqBpm, seqSwing, setSeqSwing,
   presets, setPresets, setShowAdaptModal, setApplyPresetFn,
+  seqGrid, setSeqGrid, seqStep, setSeqStep,
+  seqLockedTracks, setSeqLockedTracks,
+  seqTrackVolumes, setSeqTrackVolumes,
+  seqScatterEnabled, setSeqScatterEnabled,
+  seqScatterRadius, setSeqScatterRadius,
+  addSeqTrack,
   type SavedPreset,
 } from "./state";
-
-const STEPS = 16;
 
 const FALLBACK_TRACKS = [
   { id: "fallback-0", name: "Kick", color: "#818cf8" },
@@ -31,26 +37,11 @@ export default function Sequencer() {
       ? seqSamples().map((s) => ({ id: s.id, name: s.name, color: s.color }))
       : FALLBACK_TRACKS,
   );
-  const [grid, setGrid] = createSignal(
-    Array.from({ length: 4 }, () => Array(STEPS).fill(false) as boolean[]),
-  );
-  const [currentStep, setCurrentStep] = createSignal(-1);
+
+  // Component-local UI state only
   const [showPresets, setShowPresets] = createSignal(false);
   const [showSaveInput, setShowSaveInput] = createSignal(false);
   const [saveName, setSaveName] = createSignal("");
-  const [lockedTracks, setLockedTracks] = createSignal<boolean[]>(
-    Array.from({ length: 4 }, () => false),
-  );
-  const [trackVolumes, setTrackVolumes] = createSignal<number[]>(
-    Array.from({ length: 4 }, () => 1.0),
-  );
-  const [activeDragId, setActiveDragId] = createSignal<string | number | null>(null);
-  const [scatterEnabled, setScatterEnabled] = createSignal<boolean[]>(
-    Array.from({ length: 4 }, () => false),
-  );
-  const [scatterRadius, setScatterRadius] = createSignal<number[]>(
-    Array.from({ length: 4 }, () => 30),
-  );
   const [scatterPopupTrack, setScatterPopupTrack] = createSignal(-1);
   const sortableIds = createMemo(() => tracks().map((t) => t.id));
 
@@ -94,14 +85,15 @@ export default function Sequencer() {
     }
 
     if (resolvedSamples.length > 0) {
+      // Coordinated update: set all parallel arrays atomically
       setSeqSamples(resolvedSamples);
-      setGrid(newGrid);
+      setSeqGrid(newGrid);
       setSeqBpm(preset.bpm);
       setSeqSwing(preset.swing);
-      setLockedTracks(Array.from({ length: resolvedSamples.length }, () => false));
-      setTrackVolumes(preset.tracks.map((t) => t.volume ?? 1.0));
-      setScatterEnabled(preset.tracks.map((t) => t.scatter ?? false));
-      setScatterRadius(preset.tracks.map((t) => t.scatterRadius ?? 30));
+      setSeqLockedTracks(Array.from({ length: resolvedSamples.length }, () => false));
+      setSeqTrackVolumes(preset.tracks.map((t) => t.volume ?? 1.0));
+      setSeqScatterEnabled(preset.tracks.map((t) => t.scatter ?? false));
+      setSeqScatterRadius(preset.tracks.map((t) => t.scatterRadius ?? 30));
       eng.highlightedNodeIds = new Set(resolvedSamples.map((s) => s.id));
     }
     setShowPresets(false);
@@ -140,7 +132,7 @@ export default function Sequencer() {
     if (!name) return;
 
     const samples = seqSamples();
-    const g = grid();
+    const g = seqGrid();
     const preset: Omit<SavedPreset, "id"> = {
       name,
       bpm: seqBpm(),
@@ -149,9 +141,9 @@ export default function Sequencer() {
         samplePath: s.relativePath,
         sampleCategory: s.zone,
         pattern: [...(g[i] || Array(STEPS).fill(false))],
-        volume: trackVolumes()[i] ?? 1.0,
-        scatter: scatterEnabled()[i] ?? false,
-        scatterRadius: scatterRadius()[i] ?? 30,
+        volume: seqTrackVolumes()[i] ?? 1.0,
+        scatter: seqScatterEnabled()[i] ?? false,
+        scatterRadius: seqScatterRadius()[i] ?? 30,
       })),
     };
 
@@ -168,74 +160,13 @@ export default function Sequencer() {
     setShowSaveInput(false);
   };
 
-  // Sync grid rows when tracks are added
-  createEffect(() => {
-    const needed = tracks().length;
-    setGrid((prev) => {
-      if (prev.length >= needed) return prev;
-      const next = [...prev];
-      while (next.length < needed) {
-        next.push(Array(STEPS).fill(false) as boolean[]);
-      }
-      return next;
-    });
-  });
-
-  // Sync locked tracks length with track count
-  createEffect(() => {
-    const needed = tracks().length;
-    setLockedTracks((prev) => {
-      if (prev.length === needed) return prev;
-      if (prev.length > needed) return prev.slice(0, needed);
-      const next = [...prev];
-      while (next.length < needed) next.push(false);
-      return next;
-    });
-  });
-
-  // Sync track volumes length with track count
-  createEffect(() => {
-    const needed = tracks().length;
-    setTrackVolumes((prev) => {
-      if (prev.length === needed) return prev;
-      if (prev.length > needed) return prev.slice(0, needed);
-      const next = [...prev];
-      while (next.length < needed) next.push(1.0);
-      return next;
-    });
-  });
-
-  // Sync scatter enabled length with track count
-  createEffect(() => {
-    const needed = tracks().length;
-    setScatterEnabled((prev) => {
-      if (prev.length === needed) return prev;
-      if (prev.length > needed) return prev.slice(0, needed);
-      const next = [...prev];
-      while (next.length < needed) next.push(false);
-      return next;
-    });
-  });
-
-  // Sync scatter radius length with track count
-  createEffect(() => {
-    const needed = tracks().length;
-    setScatterRadius((prev) => {
-      if (prev.length === needed) return prev;
-      if (prev.length > needed) return prev.slice(0, needed);
-      const next = [...prev];
-      while (next.length < needed) next.push(30);
-      return next;
-    });
-  });
-
-  // Sync engine scatter circles from scatter state
+  // Sync engine scatter circles from scatter state (valid effect: syncs reactive state → external engine object)
   createEffect(() => {
     const eng = engine();
     if (!eng) return;
     const samples = seqSamples();
-    const enabled = scatterEnabled();
-    const radii = scatterRadius();
+    const enabled = seqScatterEnabled();
+    const radii = seqScatterRadius();
     const circles: Array<{ nodeId: string; radius: number }> = [];
     for (let i = 0; i < samples.length; i++) {
       if (enabled[i] && samples[i]) {
@@ -245,7 +176,7 @@ export default function Sequencer() {
     eng.scatterCircles = circles;
   });
 
-  // Scheduler
+  // Scheduler (valid effect: manages timers, an external system)
   let timerId: ReturnType<typeof setTimeout> | null = null;
 
   const clearScheduler = () => {
@@ -258,19 +189,19 @@ export default function Sequencer() {
   createEffect(() => {
     if (seqPlaying()) {
       let step = 0;
-      setCurrentStep(0);
+      setSeqStep(0);
 
       const tick = () => {
         // Read grid/bpm/swing without tracking so they don't re-trigger the effect
-        const g = untrack(grid);
+        const g = untrack(seqGrid);
         const curBpm = untrack(seqBpm);
         const curSwing = untrack(seqSwing);
 
         // Trigger samples for active cells
         const samples = untrack(seqSamples);
-        const volumes = untrack(trackVolumes);
-        const scatter = untrack(scatterEnabled);
-        const radii = untrack(scatterRadius);
+        const volumes = untrack(seqTrackVolumes);
+        const scatter = untrack(seqScatterEnabled);
+        const radii = untrack(seqScatterRadius);
         const eng = engine();
         for (let row = 0; row < g.length; row++) {
           if (g[row][step] && samples[row]) {
@@ -285,7 +216,7 @@ export default function Sequencer() {
             eng?.playSample(target, true, volumes[row] ?? 1.0);
           }
         }
-        setCurrentStep(step);
+        setSeqStep(step);
 
         // Advance
         const nextStep = (step + 1) % STEPS;
@@ -306,14 +237,14 @@ export default function Sequencer() {
       onCleanup(clearScheduler);
     } else {
       clearScheduler();
-      setCurrentStep(-1);
+      setSeqStep(-1);
     }
   });
 
   onCleanup(clearScheduler);
 
   const toggle = (row: number, col: number) => {
-    setGrid((prev) => {
+    setSeqGrid((prev) => {
       const next = prev.map((r) => [...r]);
       next[row][col] = !next[row][col];
       return next;
@@ -321,7 +252,6 @@ export default function Sequencer() {
   };
 
   const handleDragEnd = ({ draggable, droppable }: { draggable: any; droppable?: any }) => {
-    setActiveDragId(null);
     if (!draggable || !droppable) return;
 
     const samples = seqSamples();
@@ -336,12 +266,13 @@ export default function Sequencer() {
       return next;
     };
 
+    // Coordinated reorder of all parallel arrays
     setSeqSamples(reorder);
-    setGrid((prev) => reorder(prev));
-    setLockedTracks((prev) => reorder(prev));
-    setTrackVolumes((prev) => reorder(prev));
-    setScatterEnabled((prev) => reorder(prev));
-    setScatterRadius((prev) => reorder(prev));
+    setSeqGrid((prev) => reorder(prev));
+    setSeqLockedTracks((prev) => reorder(prev));
+    setSeqTrackVolumes((prev) => reorder(prev));
+    setSeqScatterEnabled((prev) => reorder(prev));
+    setSeqScatterRadius((prev) => reorder(prev));
 
     // Adjust armed track index
     const armed = armedTrack();
@@ -359,6 +290,46 @@ export default function Sequencer() {
     if (eng) {
       eng.highlightedNodeIds = new Set(seqSamples().map((s) => s.id));
     }
+  };
+
+  const handleRandomize = () => {
+    const eng = engine();
+    if (!eng) return;
+    const current = seqSamples();
+    const locked = seqLockedTracks();
+    const next: SampleNode[] = [];
+    const usedIds = new Set<string>();
+    // Pre-reserve locked track sample IDs
+    for (let i = 0; i < current.length; i++) {
+      if (locked[i]) usedIds.add(current[i].id);
+    }
+    for (let i = 0; i < current.length; i++) {
+      if (locked[i]) {
+        next.push(current[i]);
+        continue;
+      }
+      const sample = current[i];
+      const zonePool = eng.nodes.filter((n) => n.zone === sample.zone && n.id !== sample.id && !usedIds.has(n.id));
+      const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => n.id !== sample.id && !usedIds.has(n.id));
+      const picked = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : sample;
+      next.push(picked);
+      usedIds.add(picked.id);
+    }
+    setSeqSamples(next);
+    eng.highlightedNodeIds = new Set(next.map((s) => s.id));
+  };
+
+  const handleAddTrack = () => {
+    const eng = engine();
+    if (!eng || eng.nodes.length === 0) return;
+    const usedIds = new Set(seqSamples().map((s) => s.id));
+    const available = eng.nodes.filter((n) => !usedIds.has(n.id));
+    const pool = available.length > 0 ? available : eng.nodes;
+    const sample = pool[Math.floor(Math.random() * pool.length)];
+    // Coordinated add: updates seqSamples + all parallel arrays atomically
+    addSeqTrack(sample);
+    eng.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id)]);
+    setArmedTrack(seqSamples().length - 1);
   };
 
   return (
@@ -416,8 +387,23 @@ export default function Sequencer() {
             transition: "all 0.15s",
           }}
         >
-          {seqPlaying() ? (
-            /* Stop icon */
+          <Show
+            when={seqPlaying()}
+            fallback={
+              /* Play triangle */
+              <div
+                style={{
+                  width: "0",
+                  height: "0",
+                  "border-left": "9px solid currentColor",
+                  "border-top": "6px solid transparent",
+                  "border-bottom": "6px solid transparent",
+                  "margin-left": "2px",
+                }}
+              />
+            }
+          >
+            {/* Stop icon */}
             <div
               style={{
                 width: "10px",
@@ -426,19 +412,7 @@ export default function Sequencer() {
                 background: "currentColor",
               }}
             />
-          ) : (
-            /* Play triangle */
-            <div
-              style={{
-                width: "0",
-                height: "0",
-                "border-left": "9px solid currentColor",
-                "border-top": "6px solid transparent",
-                "border-bottom": "6px solid transparent",
-                "margin-left": "2px",
-              }}
-            />
-          )}
+          </Show>
         </button>
 
         {/* BPM */}
@@ -524,32 +498,7 @@ export default function Sequencer() {
 
         {/* Randomize */}
         <button
-          onClick={() => {
-            const eng = engine();
-            if (!eng) return;
-            const current = seqSamples();
-            const locked = lockedTracks();
-            const next: SampleNode[] = [];
-            const usedIds = new Set<string>();
-            // Pre-reserve locked track sample IDs
-            for (let i = 0; i < current.length; i++) {
-              if (locked[i]) usedIds.add(current[i].id);
-            }
-            for (let i = 0; i < current.length; i++) {
-              if (locked[i]) {
-                next.push(current[i]);
-                continue;
-              }
-              const sample = current[i];
-              const zonePool = eng.nodes.filter((n) => n.zone === sample.zone && n.id !== sample.id && !usedIds.has(n.id));
-              const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => n.id !== sample.id && !usedIds.has(n.id));
-              const picked = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : sample;
-              next.push(picked);
-              usedIds.add(picked.id);
-            }
-            setSeqSamples(next);
-            eng.highlightedNodeIds = new Set(next.map((s) => s.id));
-          }}
+          onClick={handleRandomize}
           title="Randomize samples"
           style={{
             width: "28px",
@@ -598,37 +547,86 @@ export default function Sequencer() {
             <Library size={14} />
           </button>
 
-          {showPresets() && (
-            <>
-              {/* Backdrop to close on click-outside */}
+          <Show when={showPresets()}>
+            {/* Backdrop to close on click-outside */}
+            <div
+              onClick={() => setShowPresets(false)}
+              style={{
+                position: "fixed",
+                inset: "0",
+                "z-index": "99",
+              }}
+            />
+            {/* Dropdown */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: "calc(100% + 6px)",
+                left: "0",
+                "min-width": "180px",
+                "max-height": "320px",
+                "overflow-y": "auto",
+                background: "rgba(20,22,28,0.97)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                "border-radius": "8px",
+                "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
+                "backdrop-filter": "blur(16px)",
+                "-webkit-backdrop-filter": "blur(16px)",
+                padding: "4px",
+                "z-index": "100",
+              }}
+            >
+              {/* Section: Patterns */}
               <div
-                onClick={() => setShowPresets(false)}
                 style={{
-                  position: "fixed",
-                  inset: "0",
-                  "z-index": "99",
-                }}
-              />
-              {/* Dropdown */}
-              <div
-                style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 6px)",
-                  left: "0",
-                  "min-width": "180px",
-                  "max-height": "320px",
-                  "overflow-y": "auto",
-                  background: "rgba(20,22,28,0.97)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  "border-radius": "8px",
-                  "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
-                  "backdrop-filter": "blur(16px)",
-                  "-webkit-backdrop-filter": "blur(16px)",
-                  padding: "4px",
-                  "z-index": "100",
+                  padding: "5px 12px 3px",
+                  "font-size": "0.58rem",
+                  "font-weight": "600",
+                  "letter-spacing": "0.1em",
+                  "text-transform": "uppercase",
+                  color: "rgba(255,255,255,0.3)",
                 }}
               >
-                {/* Section: Patterns */}
+                Patterns
+              </div>
+              <For each={FACTORY_PRESETS}>
+                {(preset) => (
+                  <div
+                    onClick={() => handleLoadPreset(preset)}
+                    style={{
+                      padding: "7px 12px",
+                      "font-size": "0.72rem",
+                      color:
+                        preset.name === "Clear"
+                          ? "rgba(255,255,255,0.35)"
+                          : "rgba(255,255,255,0.75)",
+                      "border-radius": "5px",
+                      cursor: "pointer",
+                      transition: "background 0.1s",
+                      "white-space": "nowrap",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.background =
+                        "rgba(255,255,255,0.08)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.background = "transparent")
+                    }
+                  >
+                    {preset.name}
+                  </div>
+                )}
+              </For>
+
+              {/* Section: My Presets (only if any exist) */}
+              <Show when={presets().length > 0}>
+                <div
+                  style={{
+                    height: "1px",
+                    background: "rgba(255,255,255,0.06)",
+                    margin: "4px 8px",
+                  }}
+                />
                 <div
                   style={{
                     padding: "5px 12px 3px",
@@ -639,19 +637,16 @@ export default function Sequencer() {
                     color: "rgba(255,255,255,0.3)",
                   }}
                 >
-                  Patterns
+                  My Presets
                 </div>
-                <For each={FACTORY_PRESETS}>
+                <For each={presets()}>
                   {(preset) => (
                     <div
                       onClick={() => handleLoadPreset(preset)}
                       style={{
                         padding: "7px 12px",
                         "font-size": "0.72rem",
-                        color:
-                          preset.name === "Clear"
-                            ? "rgba(255,255,255,0.35)"
-                            : "rgba(255,255,255,0.75)",
+                        color: "rgba(255,255,255,0.75)",
                         "border-radius": "5px",
                         cursor: "pointer",
                         transition: "background 0.1s",
@@ -669,57 +664,9 @@ export default function Sequencer() {
                     </div>
                   )}
                 </For>
-
-                {/* Section: My Presets (only if any exist) */}
-                <Show when={presets().length > 0}>
-                  <div
-                    style={{
-                      height: "1px",
-                      background: "rgba(255,255,255,0.06)",
-                      margin: "4px 8px",
-                    }}
-                  />
-                  <div
-                    style={{
-                      padding: "5px 12px 3px",
-                      "font-size": "0.58rem",
-                      "font-weight": "600",
-                      "letter-spacing": "0.1em",
-                      "text-transform": "uppercase",
-                      color: "rgba(255,255,255,0.3)",
-                    }}
-                  >
-                    My Presets
-                  </div>
-                  <For each={presets()}>
-                    {(preset) => (
-                      <div
-                        onClick={() => handleLoadPreset(preset)}
-                        style={{
-                          padding: "7px 12px",
-                          "font-size": "0.72rem",
-                          color: "rgba(255,255,255,0.75)",
-                          "border-radius": "5px",
-                          cursor: "pointer",
-                          transition: "background 0.1s",
-                          "white-space": "nowrap",
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.background =
-                            "rgba(255,255,255,0.08)")
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.background = "transparent")
-                        }
-                      >
-                        {preset.name}
-                      </div>
-                    )}
-                  </For>
-                </Show>
-              </div>
-            </>
-          )}
+              </Show>
+            </div>
+          </Show>
         </div>
 
         {/* Save Preset */}
@@ -750,83 +697,80 @@ export default function Sequencer() {
             <Save size={14} />
           </button>
 
-          {showSaveInput() && (
-            <>
-              <div
-                onClick={() => setShowSaveInput(false)}
+          <Show when={showSaveInput()}>
+            <div
+              onClick={() => setShowSaveInput(false)}
+              style={{
+                position: "fixed",
+                inset: "0",
+                "z-index": "99",
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "calc(100% + 6px)",
+                left: "0",
+                "min-width": "200px",
+                background: "rgba(20,22,28,0.97)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                "border-radius": "8px",
+                "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
+                "backdrop-filter": "blur(16px)",
+                "-webkit-backdrop-filter": "blur(16px)",
+                padding: "10px 12px",
+                "z-index": "100",
+                display: "flex",
+                gap: "6px",
+                "align-items": "center",
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Preset name..."
+                value={saveName()}
+                onInput={(e) => setSaveName(e.currentTarget.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
+                autofocus
                 style={{
-                  position: "fixed",
-                  inset: "0",
-                  "z-index": "99",
+                  flex: "1",
+                  height: "26px",
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  "border-radius": "4px",
+                  color: "rgba(255,255,255,0.8)",
+                  "font-size": "0.72rem",
+                  "font-family": "inherit",
+                  padding: "0 8px",
+                  outline: "none",
                 }}
               />
-              <div
+              <button
+                onClick={savePreset}
                 style={{
-                  position: "absolute",
-                  bottom: "calc(100% + 6px)",
-                  left: "0",
-                  "min-width": "200px",
-                  background: "rgba(20,22,28,0.97)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  "border-radius": "8px",
-                  "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
-                  "backdrop-filter": "blur(16px)",
-                  "-webkit-backdrop-filter": "blur(16px)",
-                  padding: "10px 12px",
-                  "z-index": "100",
-                  display: "flex",
-                  gap: "6px",
-                  "align-items": "center",
+                  height: "26px",
+                  padding: "0 10px",
+                  background: "rgba(100,225,225,0.15)",
+                  border: "1px solid rgba(100,225,225,0.3)",
+                  "border-radius": "4px",
+                  color: "rgba(100,225,225,1)",
+                  "font-size": "0.65rem",
+                  "font-weight": "600",
+                  "letter-spacing": "0.05em",
+                  cursor: "pointer",
+                  "font-family": "inherit",
+                  "white-space": "nowrap",
                 }}
               >
-                <input
-                  type="text"
-                  placeholder="Preset name..."
-                  value={saveName()}
-                  onInput={(e) => setSaveName(e.currentTarget.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
-                  autofocus
-                  style={{
-                    flex: "1",
-                    height: "26px",
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    "border-radius": "4px",
-                    color: "rgba(255,255,255,0.8)",
-                    "font-size": "0.72rem",
-                    "font-family": "inherit",
-                    padding: "0 8px",
-                    outline: "none",
-                  }}
-                />
-                <button
-                  onClick={savePreset}
-                  style={{
-                    height: "26px",
-                    padding: "0 10px",
-                    background: "rgba(100,225,225,0.15)",
-                    border: "1px solid rgba(100,225,225,0.3)",
-                    "border-radius": "4px",
-                    color: "rgba(100,225,225,1)",
-                    "font-size": "0.65rem",
-                    "font-weight": "600",
-                    "letter-spacing": "0.05em",
-                    cursor: "pointer",
-                    "font-family": "inherit",
-                    "white-space": "nowrap",
-                  }}
-                >
-                  Save
-                </button>
-              </div>
-            </>
-          )}
+                Save
+              </button>
+            </div>
+          </Show>
         </div>
       </div>
 
       {/* Grid */}
       <DragDropProvider
-        onDragStart={({ draggable }: any) => setActiveDragId(draggable.id)}
         onDragEnd={handleDragEnd}
         collisionDetector={closestCenter}
       >
@@ -851,7 +795,10 @@ export default function Sequencer() {
                       display: "flex",
                       "align-items": "center",
                       gap: "6px",
-                      opacity: activeDragId() === track.id ? "0.4" : "1",
+                      opacity: sortable.isActiveDraggable ? "0.25" : "1",
+                      ...transformStyle(sortable.transform),
+                      transition: sortable.isActiveDraggable ? undefined : "transform 200ms ease",
+                      "z-index": sortable.isActiveDraggable ? "1" : undefined,
                     }}
                   >
                     {/* Volume fader */}
@@ -871,11 +818,11 @@ export default function Sequencer() {
                         type="range"
                         min={0}
                         max={100}
-                        value={Math.round(trackVolumes()[rowIdx()] * 100)}
+                        value={Math.round(seqTrackVolumes()[rowIdx()] * 100)}
                         onInput={(e) => {
                           const idx = rowIdx();
                           const val = parseInt(e.currentTarget.value) / 100;
-                          setTrackVolumes((prev) => {
+                          setSeqTrackVolumes((prev) => {
                             const next = [...prev];
                             next[idx] = val;
                             return next;
@@ -886,14 +833,14 @@ export default function Sequencer() {
                           height: "4px",
                           "-webkit-appearance": "none",
                           appearance: "none",
-                          background: `linear-gradient(to right, ${track.color} ${Math.round(trackVolumes()[rowIdx()] * 100)}%, rgba(255,255,255,0.08) ${Math.round(trackVolumes()[rowIdx()] * 100)}%)`,
+                          background: `linear-gradient(to right, ${track.color} ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%, rgba(255,255,255,0.08) ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%)`,
                           "border-radius": "2px",
                           outline: "none",
                           cursor: "pointer",
                           transform: "rotate(-90deg)",
                           "transform-origin": "center center",
                         }}
-                        title={`Volume: ${Math.round(trackVolumes()[rowIdx()] * 100)}%`}
+                        title={`Volume: ${Math.round(seqTrackVolumes()[rowIdx()] * 100)}%`}
                       />
                     </div>
 
@@ -967,14 +914,14 @@ export default function Sequencer() {
                           onClick={(e) => {
                             e.stopPropagation();
                             const idx = rowIdx();
-                            setLockedTracks((prev) => {
+                            setSeqLockedTracks((prev) => {
                               const next = [...prev];
                               next[idx] = !next[idx];
                               return next;
                             });
                           }}
                           style={{
-                            color: lockedTracks()[rowIdx()]
+                            color: seqLockedTracks()[rowIdx()]
                               ? "rgba(100,225,225,0.8)"
                               : "rgba(255,255,255,0.2)",
                             cursor: "pointer",
@@ -984,9 +931,11 @@ export default function Sequencer() {
                             "border-radius": "2px",
                             transition: "color 0.15s",
                           }}
-                          title={lockedTracks()[rowIdx()] ? "Unlock track (allow randomize)" : "Lock track (prevent randomize)"}
+                          title={seqLockedTracks()[rowIdx()] ? "Unlock track (allow randomize)" : "Lock track (prevent randomize)"}
                         >
-                          {lockedTracks()[rowIdx()] ? <Lock size={10} /> : <LockOpen size={10} />}
+                          <Show when={seqLockedTracks()[rowIdx()]} fallback={<LockOpen size={10} />}>
+                            <Lock size={10} />
+                          </Show>
                         </div>
 
                         {/* Scatter toggle */}
@@ -1000,14 +949,14 @@ export default function Sequencer() {
                             onClick={(e) => {
                               e.stopPropagation();
                               const idx = rowIdx();
-                              setScatterEnabled((prev) => {
+                              setSeqScatterEnabled((prev) => {
                                 const next = [...prev];
                                 next[idx] = !next[idx];
                                 return next;
                               });
                             }}
                             style={{
-                              color: scatterEnabled()[rowIdx()]
+                              color: seqScatterEnabled()[rowIdx()]
                                 ? "rgba(45, 212, 191, 0.9)"
                                 : "rgba(255,255,255,0.2)",
                               cursor: "pointer",
@@ -1017,9 +966,11 @@ export default function Sequencer() {
                               "border-radius": "2px",
                               transition: "color 0.15s",
                             }}
-                            title={scatterEnabled()[rowIdx()] ? "Disable scatter" : "Enable scatter"}
+                            title={seqScatterEnabled()[rowIdx()] ? "Disable scatter" : "Enable scatter"}
                           >
-                            {scatterEnabled()[rowIdx()] ? <CircleDotDashed size={10} /> : <CircleDashed size={10} />}
+                            <Show when={seqScatterEnabled()[rowIdx()]} fallback={<CircleDashed size={10} />}>
+                              <CircleDotDashed size={10} />
+                            </Show>
                           </div>
 
                           {/* Scatter radius popup (on hover) */}
@@ -1052,11 +1003,11 @@ export default function Sequencer() {
                                 type="range"
                                 min={10}
                                 max={100}
-                                value={scatterRadius()[rowIdx()]}
+                                value={seqScatterRadius()[rowIdx()]}
                                 onInput={(e) => {
                                   const idx = rowIdx();
                                   const val = parseInt(e.currentTarget.value);
-                                  setScatterRadius((prev) => {
+                                  setSeqScatterRadius((prev) => {
                                     const next = [...prev];
                                     next[idx] = val;
                                     return next;
@@ -1067,7 +1018,7 @@ export default function Sequencer() {
                                   height: "3px",
                                   "-webkit-appearance": "none",
                                   appearance: "none",
-                                  background: `linear-gradient(to right, rgba(45,212,191,0.5) ${((scatterRadius()[rowIdx()] - 10) / 90) * 100}%, rgba(255,255,255,0.08) ${((scatterRadius()[rowIdx()] - 10) / 90) * 100}%)`,
+                                  background: `linear-gradient(to right, rgba(45,212,191,0.5) ${((seqScatterRadius()[rowIdx()] - 10) / 90) * 100}%, rgba(255,255,255,0.08) ${((seqScatterRadius()[rowIdx()] - 10) / 90) * 100}%)`,
                                   "border-radius": "2px",
                                   outline: "none",
                                   cursor: "pointer",
@@ -1082,7 +1033,7 @@ export default function Sequencer() {
                                   "text-align": "right",
                                 }}
                               >
-                                {scatterRadius()[rowIdx()]}
+                                {seqScatterRadius()[rowIdx()]}
                               </span>
                             </div>
                             </div>
@@ -1093,10 +1044,10 @@ export default function Sequencer() {
 
                     {/* Steps */}
                     <div style={{ display: "flex", gap: "3px", flex: "1" }}>
-                      <For each={grid()[rowIdx()]}>
+                      <For each={seqGrid()[rowIdx()]}>
                         {(active, colIdx) => {
                           const isOddGroup = () => Math.floor(colIdx() / 4) % 2 === 1;
-                          const isPlayhead = () => currentStep() === colIdx();
+                          const isPlayhead = () => seqStep() === colIdx();
                           return (
                             <div
                               onClick={() => toggle(rowIdx(), colIdx())}
@@ -1140,7 +1091,7 @@ export default function Sequencer() {
                                 }}
                               />
                               {/* Playhead overlay */}
-                              {isPlayhead() && (
+                              <Show when={isPlayhead()}>
                                 <div
                                   style={{
                                     position: "absolute",
@@ -1152,7 +1103,7 @@ export default function Sequencer() {
                                     "pointer-events": "none",
                                   }}
                                 />
-                              )}
+                              </Show>
                             </div>
                           );
                         }}
@@ -1167,17 +1118,7 @@ export default function Sequencer() {
           {/* Add track button */}
           <div
             data-seq-interactive
-            onClick={() => {
-              const eng = engine();
-              if (!eng || eng.nodes.length === 0) return;
-              const usedIds = new Set(seqSamples().map((s) => s.id));
-              const available = eng.nodes.filter((n) => !usedIds.has(n.id));
-              const pool = available.length > 0 ? available : eng.nodes;
-              const sample = pool[Math.floor(Math.random() * pool.length)];
-              setSeqSamples((prev) => [...prev, sample]);
-              eng.highlightedNodeIds = new Set([...seqSamples().map((s) => s.id), sample.id]);
-              setArmedTrack(seqSamples().length - 1);
-            }}
+            onClick={handleAddTrack}
             style={{
               display: "flex",
               "align-items": "center",
