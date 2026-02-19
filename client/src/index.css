@@ -74,6 +74,24 @@ input[type="range"].swing-slider::-moz-range-thumb {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Tap feedback for buttons — visible press state on mobile */
+.tap-fb:active {
+  transform: scale(0.9);
+  filter: brightness(1.5);
+}
+.tap-fb {
+  transition: transform 100ms ease, filter 100ms ease, background 100ms ease, color 150ms ease, opacity 150ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Tap feedback for preset list items */
+.tap-fb-item:active {
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+.tap-fb-item {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Click-to-start pulse animation */
 @keyframes pulse {
   0%,

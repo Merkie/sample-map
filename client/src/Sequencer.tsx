@@ -387,8 +387,8 @@ export default function Sequencer() {
         <button
           onClick={() => setSeqPlaying(!seqPlaying())}
           class={cn(
-            "w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
-            "flex items-center justify-center text-xs shrink-0 transition-all duration-150",
+            "tap-fb w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
+            "flex items-center justify-center text-xs shrink-0",
             seqPlaying()
               ? "bg-accent/[0.12] text-accent"
               : "bg-white/[0.04] text-white/60",
@@ -473,7 +473,7 @@ export default function Sequencer() {
         <button
           onClick={handleRandomize}
           title="Randomize samples"
-          class="w-7 h-7 border border-white/[0.12] rounded-md bg-white/[0.04] text-white/50 cursor-pointer flex items-center justify-center shrink-0 transition-all duration-150 p-0"
+          class="tap-fb w-7 h-7 border border-white/[0.12] rounded-md bg-white/[0.04] text-white/50 cursor-pointer flex items-center justify-center shrink-0 p-0"
         >
           <Dices size={14} />
         </button>
@@ -485,8 +485,8 @@ export default function Sequencer() {
             onClick={() => setShowPresets(!showPresets())}
             title="Pattern presets"
             class={cn(
-              "w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
-              "flex items-center justify-center shrink-0 transition-all duration-150 p-0",
+              "tap-fb w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
+              "flex items-center justify-center shrink-0 p-0",
               showPresets()
                 ? "bg-accent/[0.12] text-accent"
                 : "bg-white/[0.04] text-white/50",
@@ -503,8 +503,8 @@ export default function Sequencer() {
             onClick={() => { setShowSaveInput(!showSaveInput()); setSaveName(""); }}
             title="Save preset"
             class={cn(
-              "w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
-              "flex items-center justify-center shrink-0 transition-all duration-150 p-0",
+              "tap-fb w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
+              "flex items-center justify-center shrink-0 p-0",
               showSaveInput()
                 ? "bg-accent/[0.12] text-accent"
                 : "bg-white/[0.04] text-white/50",
@@ -536,7 +536,7 @@ export default function Sequencer() {
               <div
                 onClick={() => handleLoadPreset(preset)}
                 class={cn(
-                  "px-3 py-1.5 text-[0.72rem] rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]",
+                  "tap-fb-item px-3 py-1.5 text-[0.72rem] rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]",
                   preset.name === "Clear" ? "text-white/35" : "text-white/75",
                 )}
               >
@@ -554,7 +554,7 @@ export default function Sequencer() {
               {(preset) => (
                 <div
                   onClick={() => handleLoadPreset(preset)}
-                  class="px-3 py-1.5 text-[0.72rem] text-white/75 rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]"
+                  class="tap-fb-item px-3 py-1.5 text-[0.72rem] text-white/75 rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]"
                 >
                   {preset.name}
                 </div>
@@ -865,7 +865,7 @@ export default function Sequencer() {
           <div
             data-seq-interactive
             onClick={handleAddTrack}
-            class="sticky left-0 flex items-center justify-center w-[148px] h-7 mt-0.5 pl-4 rounded border border-dashed border-white/[0.08] text-white/25 cursor-pointer transition-all duration-150"
+            class="tap-fb sticky left-0 flex items-center justify-center w-[148px] h-7 mt-0.5 pl-4 rounded border border-dashed border-white/[0.08] text-white/25 cursor-pointer"
           >
             <Plus size={14} />
           </div>
