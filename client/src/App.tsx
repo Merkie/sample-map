@@ -13,6 +13,7 @@ import {
   seqPlaying, setSeqPlaying,
   debugActive, setDebugActive,
   showZoneBorders, setShowZoneBorders,
+  physicsEnabled, setPhysicsEnabled,
   setPresets,
   showAdaptModal, setShowAdaptModal,
   applyPresetFn,
@@ -53,6 +54,7 @@ function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
 
 function DebugPanel() {
   const [pos, setPos] = createSignal({ x: 16, y: 48 });
+  const [refreshing, setRefreshing] = createSignal(false);
   let dragging = false;
   let offsetX = 0;
   let offsetY = 0;
@@ -150,6 +152,72 @@ function DebugPanel() {
           />
           Show zone borders
         </label>
+        <label
+          style={{
+            display: "flex",
+            "align-items": "center",
+            gap: "8px",
+            cursor: "pointer",
+            "font-size": "0.7rem",
+            color: "rgba(255,255,255,0.7)",
+            "margin-top": "6px",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={physicsEnabled()}
+            onChange={(e) => {
+              const enabled = e.currentTarget.checked;
+              setPhysicsEnabled(enabled);
+              const eng = engine();
+              if (eng) eng.setPhysicsEnabled(enabled);
+            }}
+            style={{
+              width: "14px",
+              height: "14px",
+              "accent-color": "rgba(100,225,225,1)",
+              cursor: "pointer",
+            }}
+          />
+          d3-force physics
+        </label>
+        <button
+          disabled={refreshing()}
+          onClick={async () => {
+            setRefreshing(true);
+            try {
+              const res = await fetch("/api/samples/refresh");
+              if (!res.ok) throw new Error("Refresh failed");
+              const samples = await res.json();
+              const eng = engine();
+              if (eng) {
+                eng.loadSamples(samples);
+                eng.zoomToFit();
+                setSampleCount(samples.length);
+                setSeqSamples(pickSequencerSamples(eng.nodes));
+              }
+            } catch (err) {
+              console.error("Sample refresh failed:", err);
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+          style={{
+            "margin-top": "8px",
+            width: "100%",
+            height: "28px",
+            background: refreshing() ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            "border-radius": "4px",
+            color: refreshing() ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.6)",
+            "font-size": "0.68rem",
+            "font-family": "inherit",
+            cursor: refreshing() ? "default" : "pointer",
+            "letter-spacing": "0.04em",
+          }}
+        >
+          {refreshing() ? "Refreshing..." : "Refresh sample cache"}
+        </button>
       </div>
     </div>
   );

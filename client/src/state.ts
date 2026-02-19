@@ -25,6 +25,7 @@ export const [seqSwing, setSeqSwing] = createSignal(0);
 // -- Debug panel --
 export const [debugActive, setDebugActive] = createSignal(false);
 export const [showZoneBorders, setShowZoneBorders] = createSignal(false);
+export const [physicsEnabled, setPhysicsEnabled] = createSignal(true);
 
 // -- Presets --
 export interface SavedPreset {

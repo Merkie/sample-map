@@ -96,6 +96,9 @@ export class SampleMapEngine {
   // Debug: draw zone borders
   showZoneBorders = false;
 
+  // Debug: d3-force physics post-processing
+  physicsEnabled = true;
+
   // Duplicate prevention: nodes to exclude from arrow-key navigation
   excludeNodeIds: Set<string> | null = null;
 
@@ -431,8 +434,10 @@ export class SampleMapEngine {
     this.time += dt;
 
     // Run a few physics ticks per frame for settling
-    tickSimulation();
-    syncFromSimulation(this.nodes);
+    if (this.physicsEnabled) {
+      tickSimulation();
+      syncFromSimulation(this.nodes);
+    }
 
     // Update glow decay
     for (const node of this.nodes) {
@@ -503,6 +508,25 @@ export class SampleMapEngine {
     selectNode(this.selectionRing, node);
     this.playRingSelection(node);
     this.followTarget = { x: node.x, y: node.y };
+  }
+
+  /** Toggle d3-force physics on/off. When off, nodes snap to raw t-SNE positions. */
+  setPhysicsEnabled(enabled: boolean) {
+    this.physicsEnabled = enabled;
+    if (enabled) {
+      createSimulation(this.nodes);
+      preSettle(physicsConfig.preSettleTicks);
+      syncFromSimulation(this.nodes);
+    } else {
+      stopSimulation();
+      for (const node of this.nodes) {
+        node.x = node.tsneX;
+        node.y = node.tsneY;
+        node.vx = 0;
+        node.vy = 0;
+      }
+    }
+    this.zoomToFit();
   }
 
   // ===== Audio =====

@@ -51,10 +51,12 @@ def extract_features(filepath: str) -> list[float] | None:
     centroid = float(np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)[0]))
     bandwidth = float(np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]))
     rolloff = float(np.mean(librosa.feature.spectral_rolloff(y=y, sr=sr)[0]))
+    flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)[0]))
+    contrast = [float(np.mean(band)) for band in librosa.feature.spectral_contrast(y=y, sr=sr)]
     mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
     mfcc_means = [float(np.mean(mfccs[i])) for i in range(13)]
 
-    return [duration, rms, zcr, centroid, bandwidth, rolloff] + mfcc_means
+    return [duration, rms, zcr, centroid, bandwidth, rolloff, flatness] + contrast + mfcc_means
 
 
 def main():
@@ -134,8 +136,10 @@ def main():
     if reassigned:
         print(f"Bisector reconciliation: reassigned {reassigned} samples", file=sys.stderr)
 
-    # Label each cluster by average spectral centroid: lowest→kick, highest→hihat
-    zone_names = ["kick", "snare", "perc", "hihat"][:n_zones]
+    # Label each cluster by average spectral centroid: lowest→kick, highest→hihat.
+    # Ordering is kick < perc < snare < hihat because tonal percussion (congas,
+    # bongos, cowbells) has lower centroid than noisy broadband snares/claps.
+    zone_names = ["kick", "perc", "snare", "hihat"][:n_zones]
     cluster_avg = {}
     for c in range(n_zones):
         indices_c = [j for j in range(len(labels)) if labels[j] == c]
