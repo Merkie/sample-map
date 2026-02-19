@@ -253,6 +253,7 @@ export default function App() {
       const eng = engine();
       if (!eng) return;
       eng.touchActive = true;
+      eng.isTouchDevice = true;
 
       if (ev.touches.length === 2) {
         // Cancel any single-finger drag and dismiss selection ring

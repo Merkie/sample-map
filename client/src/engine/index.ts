@@ -105,6 +105,9 @@ export class SampleMapEngine {
   // Touch input active (suppresses hover-to-play)
   touchActive = false;
 
+  // Set permanently on first touch — disables hover-to-play on touch devices
+  isTouchDevice = false;
+
   // Scatter circles: rendered as dashed circles around sample nodes
   scatterCircles: Array<{ nodeId: string; radius: number }> = [];
 
@@ -492,8 +495,8 @@ export class SampleMapEngine {
   };
 
   private updateHover() {
-    // Clear hover when cursor is outside the window or during touch interaction
-    if (!this.mouseInWindow || this.touchActive) {
+    // Clear hover when cursor is outside the window or on touch devices
+    if (!this.mouseInWindow || this.touchActive || this.isTouchDevice) {
       for (const node of this.nodes) node.hovered = false;
       this.hoveredNode = null;
       this.lastPlayedId = null;
