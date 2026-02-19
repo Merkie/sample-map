@@ -1,5 +1,4 @@
 import { resolve, join } from "path";
-import { existsSync } from "fs";
 
 const ROOT = resolve(import.meta.dir, "..");
 const PYTHON = resolve(ROOT, "venv", "bin", "python3");
@@ -15,7 +14,7 @@ async function loadOrExtract(): Promise<unknown[]> {
   if (cachedSamples) return cachedSamples;
 
   // Try loading from disk cache
-  if (existsSync(CACHE_FILE)) {
+  if (await Bun.file(CACHE_FILE).exists()) {
     try {
       const text = await Bun.file(CACHE_FILE).text();
       cachedSamples = JSON.parse(text);
@@ -94,7 +93,7 @@ Bun.serve({
     if (url.pathname === "/api/samples/refresh" && req.method === "GET") {
       cachedSamples = null;
       try {
-        if (existsSync(CACHE_FILE)) await Bun.write(CACHE_FILE, "");
+        if (await Bun.file(CACHE_FILE).exists()) await Bun.write(CACHE_FILE, "");
       } catch {
         /* ignore */
       }
@@ -140,8 +139,9 @@ Bun.serve({
     // Load saved presets
     if (url.pathname === "/api/presets" && req.method === "GET") {
       try {
-        if (existsSync(PRESETS_FILE)) {
-          const text = await Bun.file(PRESETS_FILE).text();
+        const presetsFile = Bun.file(PRESETS_FILE);
+        if (await presetsFile.exists()) {
+          const text = await presetsFile.text();
           return Response.json(JSON.parse(text));
         }
         return Response.json([]);
@@ -156,9 +156,10 @@ Bun.serve({
         const preset = await req.json();
         preset.id = `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         let presets: unknown[] = [];
-        if (existsSync(PRESETS_FILE)) {
+        const presetsOnDisk = Bun.file(PRESETS_FILE);
+        if (await presetsOnDisk.exists()) {
           try {
-            const text = await Bun.file(PRESETS_FILE).text();
+            const text = await presetsOnDisk.text();
             presets = JSON.parse(text);
           } catch { /* start fresh */ }
         }
