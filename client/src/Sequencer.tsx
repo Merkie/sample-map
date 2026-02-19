@@ -12,7 +12,7 @@ import type { SampleNode } from "./engine";
 import { FACTORY_PRESETS } from "./presets";
 import {
   STEPS,
-  engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
+  engine, seqActive, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
   seqPlaying, setSeqPlaying, seqBpm, setSeqBpm, seqSwing, setSeqSwing,
   presets, setPresets, setShowAdaptModal, setApplyPresetFn,
   seqGrid, setSeqGrid, seqStep, setSeqStep,
@@ -164,13 +164,16 @@ export default function Sequencer() {
   createEffect(() => {
     const eng = engine();
     if (!eng) return;
+    const active = seqActive();
     const samples = seqSamples();
     const enabled = seqScatterEnabled();
     const radii = seqScatterRadius();
     const circles: Array<{ nodeId: string; radius: number }> = [];
-    for (let i = 0; i < samples.length; i++) {
-      if (enabled[i] && samples[i]) {
-        circles.push({ nodeId: samples[i].id, radius: radii[i] ?? 30 });
+    if (active) {
+      for (let i = 0; i < samples.length; i++) {
+        if (enabled[i] && samples[i]) {
+          circles.push({ nodeId: samples[i].id, radius: radii[i] ?? 30 });
+        }
       }
     }
     eng.scatterCircles = circles;

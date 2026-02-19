@@ -235,23 +235,36 @@ export default function App() {
     e.topMargin = HEADER_HEIGHT;
     e.onSampleCount = (n) => setSampleCount(n);
     e.onNodeSelect = (node) => {
+      if (!node) {
+        // Clicked empty space — disarm
+        if (armedTrack() >= 0) setArmedTrack(-1);
+        return;
+      }
+
+      // If sequencer is open, check if clicked node belongs to a track
+      if (seqActive()) {
+        const samples = seqSamples();
+        const trackIdx = samples.findIndex(s => s.id === node.id);
+        if (trackIdx >= 0) {
+          // Arm the track this node belongs to
+          setArmedTrack(trackIdx);
+          return;
+        }
+      }
+
+      // If a track is armed, replace its sample with the clicked node
       const idx = armedTrack();
       if (idx < 0) return;
-      if (node) {
-        const current = seqSamples();
-        if (current.some((s, i) => i !== idx && s.id === node.id)) return;
-        setSeqSamples((prev) => {
-          const next = [...prev];
-          next[idx] = node;
-          return next;
-        });
-        // Update highlighted set
-        const updated = seqSamples().map((s) => s.id);
-        e.highlightedNodeIds = new Set(updated);
-      } else {
-        // Clicked empty space — disarm
-        setArmedTrack(-1);
-      }
+      const current = seqSamples();
+      if (current.some((s, i) => i !== idx && s.id === node.id)) return;
+      setSeqSamples((prev) => {
+        const next = [...prev];
+        next[idx] = node;
+        return next;
+      });
+      // Update highlighted set
+      const updated = seqSamples().map((s) => s.id);
+      e.highlightedNodeIds = new Set(updated);
     };
     e.render();
 
@@ -402,9 +415,6 @@ export default function App() {
       eng.highlightedNodeIds = next
         ? new Set(seqSamples().map((s) => s.id))
         : null;
-      if (!next) {
-        eng.scatterCircles = [];
-      }
       eng.bottomMargin = next ? seqHeight : 0;
       eng.zoomToFit();
     }

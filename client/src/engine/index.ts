@@ -867,7 +867,24 @@ export class SampleMapEngine {
 
     const wts = this.worldToScreen.bind(this);
     renderStars(ctx, this.stars, this.camera, this.width, this.height, this.time);
-    renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts, this.highlightedNodeIds ?? undefined);
+    // Build scatter node set: all nodes within any scatter circle
+    let scatterNodeIds: Set<string> | undefined;
+    if (this.scatterCircles.length > 0) {
+      scatterNodeIds = new Set<string>();
+      const nodeMap = new Map<string, SampleNode>();
+      for (const n of this.nodes) nodeMap.set(n.id, n);
+      for (const sc of this.scatterCircles) {
+        const center = nodeMap.get(sc.nodeId);
+        if (!center) continue;
+        const r2 = sc.radius * sc.radius;
+        for (const n of this.nodes) {
+          const dx = n.x - center.x;
+          const dy = n.y - center.y;
+          if (dx * dx + dy * dy <= r2) scatterNodeIds.add(n.id);
+        }
+      }
+    }
+    renderSamples(ctx, this.nodes, this.camera, this.width, this.height, this.time, wts, this.highlightedNodeIds ?? undefined, scatterNodeIds);
     renderScatterCircles(ctx, this.scatterCircles, this.nodes, wts, this.camera.zoom, this.time);
     if (this.showZoneBorders) {
       renderZoneBorders(ctx, this.nodes, wts, this.camera.zoom);

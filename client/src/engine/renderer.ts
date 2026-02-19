@@ -54,9 +54,17 @@ export function renderSamples(
   time: number,
   worldToScreen: WorldToScreen,
   highlightedIds?: Set<string>,
+  scatterNodeIds?: Set<string>,
 ): void {
   const radius = SAMPLE_RADIUS * camera.zoom;
   const dimming = highlightedIds != null && highlightedIds.size > 0;
+
+  const getDimFactor = (id: string) => {
+    if (!dimming) return 1;
+    if (highlightedIds.has(id)) return 1;
+    if (scatterNodeIds && scatterNodeIds.has(id)) return 0.67;
+    return 0.35;
+  };
 
   // Glow pass (additive blending)
   ctx.globalCompositeOperation = "lighter";
@@ -64,7 +72,7 @@ export function renderSamples(
     const [x, y] = worldToScreen(node.x, node.y);
     if (x < -50 || x > width + 50 || y < -50 || y > height + 50) continue;
 
-    const dimFactor = dimming && !highlightedIds.has(node.id) ? 0.35 : 1;
+    const dimFactor = getDimFactor(node.id);
     const [r, g, b] = hexToRgb(node.color);
     const pulse = 0.5 + 0.5 * Math.sin(time * 2 + node.tsneX * 0.05);
     const baseGlow = 0.04 + pulse * 0.03;
@@ -94,7 +102,7 @@ export function renderSamples(
     const [x, y] = worldToScreen(node.x, node.y);
     if (x < -30 || x > width + 30 || y < -30 || y > height + 30) continue;
 
-    const dimFactor = dimming && !highlightedIds.has(node.id) ? 0.35 : 1;
+    const dimFactor = getDimFactor(node.id);
     const [r, g, b] = hexToRgb(node.color);
 
     ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${(0.85 + node.glow * 0.15) * dimFactor})`;
