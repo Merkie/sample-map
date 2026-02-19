@@ -85,7 +85,7 @@ export default function Sequencer() {
     const barGap = 6;
     const barsBeforeStep = Math.floor(step / STEPS_PER_BAR);
     const stepLeft = step * (stepWidth + 3) + barsBeforeStep * barGap;
-    const stickyWidth = 136;
+    const stickyWidth = 148;
     const viewLeft = gridScrollRef.scrollLeft;
     const viewWidth = gridScrollRef.clientWidth - stickyWidth;
     if (stepLeft < viewLeft || stepLeft + stepWidth > viewLeft + viewWidth) {
@@ -603,13 +603,17 @@ export default function Sequencer() {
         <DragDropSensors />
         <div
           ref={gridScrollRef}
-          class="thin-scrollbar flex flex-col gap-[3px] px-4 overflow-x-auto overflow-y-hidden"
+          class="thin-scrollbar flex flex-col pr-4 overflow-x-auto overflow-y-hidden"
         >
           <SortableProvider ids={sortableIds()}>
             <For each={tracks()}>
               {(track, rowIdx) => {
                 const sortable = createSortable(track.id);
                 return (
+                  <>
+                  <Show when={rowIdx() > 0}>
+                    <div class="w-full shrink-0 relative z-[3]" style={{ height: "3px", background: "#101218" }} />
+                  </Show>
                   <div
                     ref={sortable.ref}
                     class="flex items-center"
@@ -621,7 +625,7 @@ export default function Sequencer() {
                     }}
                   >
                     {/* Sticky track controls */}
-                    <div class="sticky left-0 z-[2] flex items-center gap-1.5 bg-panel pr-1.5 shrink-0">
+                    <div class="sticky left-0 z-[2] flex items-center gap-1.5 pr-1.5 pl-4 shrink-0 border-r border-white/[0.06]" style={{ background: "#101218" }}>
                       {/* Volume fader */}
                       <div
                         data-seq-interactive
@@ -798,7 +802,7 @@ export default function Sequencer() {
                     </div>
 
                     {/* Steps */}
-                    <div class="flex gap-[3px] flex-1 min-w-min">
+                    <div class="flex gap-[3px] flex-1 min-w-min overflow-y-hidden">
                       <For each={seqGrid()[rowIdx()]?.slice(0, seqBars() * STEPS_PER_BAR)}>
                         {(active, colIdx) => {
                           const isOddGroup = () => Math.floor(colIdx() / 4) % 2 === 1;
@@ -848,6 +852,7 @@ export default function Sequencer() {
                       </For>
                     </div>
                   </div>
+                  </>
                 );
               }}
             </For>
@@ -857,7 +862,7 @@ export default function Sequencer() {
           <div
             data-seq-interactive
             onClick={handleAddTrack}
-            class="sticky left-0 flex items-center justify-center w-[136px] h-7 mt-0.5 rounded border border-dashed border-white/[0.08] text-white/25 cursor-pointer transition-all duration-150"
+            class="sticky left-0 flex items-center justify-center w-[148px] h-7 mt-0.5 pl-4 rounded border border-dashed border-white/[0.08] text-white/25 cursor-pointer transition-all duration-150"
           >
             <Plus size={14} />
           </div>
