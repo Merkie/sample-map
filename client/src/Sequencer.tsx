@@ -47,6 +47,16 @@ export default function Sequencer() {
   const [confirmDeleteTrack, setConfirmDeleteTrack] = createSignal(-1);
   const sortableIds = createMemo(() => tracks().map((t) => t.id));
   let gridScrollRef: HTMLDivElement | undefined;
+  let presetsBtnRef: HTMLButtonElement | undefined;
+  let saveBtnRef: HTMLButtonElement | undefined;
+
+  const popoverLeft = (btn: HTMLButtonElement | undefined, popoverWidth: number) => {
+    const rect = btn?.getBoundingClientRect();
+    if (!rect) return 0;
+    const left = rect.left;
+    const overflow = left + popoverWidth - window.innerWidth + 8;
+    return overflow > 0 ? left - overflow : left;
+  };
 
   const handleDeleteTrack = (idx: number) => {
     const hasNotes = seqGrid()[idx]?.some((v) => v);
@@ -372,7 +382,7 @@ export default function Sequencer() {
       }}
     >
       {/* Transport bar */}
-      <div class="flex items-center gap-4 px-4 pb-2 border-b border-white/[0.04] mb-1.5 overflow-x-auto overflow-y-hidden">
+      <div class="thin-scrollbar flex items-center gap-4 px-4 pb-2 border-b border-white/[0.04] mb-1.5 overflow-x-auto overflow-y-hidden">
         {/* Play / Stop */}
         <button
           onClick={() => setSeqPlaying(!seqPlaying())}
@@ -469,8 +479,9 @@ export default function Sequencer() {
         </button>
 
         {/* Presets */}
-        <div data-seq-interactive class="relative shrink-0">
+        <div data-seq-interactive class="shrink-0">
           <button
+            ref={presetsBtnRef}
             onClick={() => setShowPresets(!showPresets())}
             title="Pattern presets"
             class={cn(
@@ -483,53 +494,12 @@ export default function Sequencer() {
           >
             <Library size={14} />
           </button>
-
-          <Show when={showPresets()}>
-            <div
-              onClick={() => setShowPresets(false)}
-              class="fixed inset-0 z-[99]"
-            />
-            <div class="absolute bottom-[calc(100%+6px)] left-0 min-w-[180px] max-h-80 overflow-y-auto bg-[rgba(20,22,28,0.97)] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-lg p-1 z-[100]">
-              <div class="px-3 pt-1.5 pb-1 text-[0.58rem] font-semibold tracking-wider uppercase text-white/30">
-                Patterns
-              </div>
-              <For each={FACTORY_PRESETS}>
-                {(preset) => (
-                  <div
-                    onClick={() => handleLoadPreset(preset)}
-                    class={cn(
-                      "px-3 py-1.5 text-[0.72rem] rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]",
-                      preset.name === "Clear" ? "text-white/35" : "text-white/75",
-                    )}
-                  >
-                    {preset.name}
-                  </div>
-                )}
-              </For>
-
-              <Show when={presets().length > 0}>
-                <div class="h-px bg-white/[0.06] mx-2 my-1" />
-                <div class="px-3 pt-1.5 pb-1 text-[0.58rem] font-semibold tracking-wider uppercase text-white/30">
-                  My Presets
-                </div>
-                <For each={presets()}>
-                  {(preset) => (
-                    <div
-                      onClick={() => handleLoadPreset(preset)}
-                      class="px-3 py-1.5 text-[0.72rem] text-white/75 rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]"
-                    >
-                      {preset.name}
-                    </div>
-                  )}
-                </For>
-              </Show>
-            </div>
-          </Show>
         </div>
 
         {/* Save Preset */}
-        <div data-seq-interactive class="relative shrink-0">
+        <div data-seq-interactive class="shrink-0">
           <button
+            ref={saveBtnRef}
             onClick={() => { setShowSaveInput(!showSaveInput()); setSaveName(""); }}
             title="Save preset"
             class={cn(
@@ -542,32 +512,88 @@ export default function Sequencer() {
           >
             <Save size={14} />
           </button>
-
-          <Show when={showSaveInput()}>
-            <div
-              onClick={() => setShowSaveInput(false)}
-              class="fixed inset-0 z-[99]"
-            />
-            <div class="absolute bottom-[calc(100%+6px)] left-0 min-w-[200px] bg-[rgba(20,22,28,0.97)] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-lg px-3 py-2.5 z-[100] flex gap-1.5 items-center">
-              <input
-                type="text"
-                placeholder="Preset name..."
-                value={saveName()}
-                onInput={(e) => setSaveName(e.currentTarget.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
-                autofocus
-                class="flex-1 h-[26px] bg-white/5 border border-white/10 rounded text-white/80 text-[0.72rem] px-2 outline-none"
-              />
-              <button
-                onClick={savePreset}
-                class="h-[26px] px-2.5 bg-accent/15 border border-accent/30 rounded text-accent text-[0.65rem] font-semibold tracking-wide cursor-pointer whitespace-nowrap"
-              >
-                Save
-              </button>
-            </div>
-          </Show>
         </div>
       </div>
+
+      {/* Presets dropdown — fixed so it escapes overflow */}
+      <Show when={showPresets()}>
+        <div
+          onClick={() => setShowPresets(false)}
+          class="fixed inset-0 z-[99]"
+        />
+        <div
+          class="thin-scrollbar fixed min-w-[180px] max-h-80 overflow-y-auto bg-[rgba(20,22,28,0.97)] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-lg p-1 z-[100]"
+          style={{
+            left: `${popoverLeft(presetsBtnRef, 180)}px`,
+            bottom: `${window.innerHeight - (presetsBtnRef?.getBoundingClientRect().top ?? 0) + 6}px`,
+          }}
+        >
+          <div class="px-3 pt-1.5 pb-1 text-[0.58rem] font-semibold tracking-wider uppercase text-white/30">
+            Patterns
+          </div>
+          <For each={FACTORY_PRESETS}>
+            {(preset) => (
+              <div
+                onClick={() => handleLoadPreset(preset)}
+                class={cn(
+                  "px-3 py-1.5 text-[0.72rem] rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]",
+                  preset.name === "Clear" ? "text-white/35" : "text-white/75",
+                )}
+              >
+                {preset.name}
+              </div>
+            )}
+          </For>
+
+          <Show when={presets().length > 0}>
+            <div class="h-px bg-white/[0.06] mx-2 my-1" />
+            <div class="px-3 pt-1.5 pb-1 text-[0.58rem] font-semibold tracking-wider uppercase text-white/30">
+              My Presets
+            </div>
+            <For each={presets()}>
+              {(preset) => (
+                <div
+                  onClick={() => handleLoadPreset(preset)}
+                  class="px-3 py-1.5 text-[0.72rem] text-white/75 rounded cursor-pointer transition-colors duration-100 whitespace-nowrap hover:bg-white/[0.08]"
+                >
+                  {preset.name}
+                </div>
+              )}
+            </For>
+          </Show>
+        </div>
+      </Show>
+
+      {/* Save preset popup — fixed so it escapes overflow */}
+      <Show when={showSaveInput()}>
+        <div
+          onClick={() => setShowSaveInput(false)}
+          class="fixed inset-0 z-[99]"
+        />
+        <div
+          class="fixed min-w-[200px] bg-[rgba(20,22,28,0.97)] border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-lg px-3 py-2.5 z-[100] flex gap-1.5 items-center"
+          style={{
+            left: `${popoverLeft(saveBtnRef, 200)}px`,
+            bottom: `${window.innerHeight - (saveBtnRef?.getBoundingClientRect().top ?? 0) + 6}px`,
+          }}
+        >
+          <input
+            type="text"
+            placeholder="Preset name..."
+            value={saveName()}
+            onInput={(e) => setSaveName(e.currentTarget.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
+            autofocus
+            class="flex-1 h-[26px] bg-white/5 border border-white/10 rounded text-white/80 text-[0.72rem] px-2 outline-none"
+          />
+          <button
+            onClick={savePreset}
+            class="h-[26px] px-2.5 bg-accent/15 border border-accent/30 rounded text-accent text-[0.65rem] font-semibold tracking-wide cursor-pointer whitespace-nowrap"
+          >
+            Save
+          </button>
+        </div>
+      </Show>
 
       {/* Grid */}
       <DragDropProvider
@@ -577,7 +603,7 @@ export default function Sequencer() {
         <DragDropSensors />
         <div
           ref={gridScrollRef}
-          class="seq-grid-scroll flex flex-col gap-[3px] px-4 overflow-x-auto overflow-y-hidden"
+          class="thin-scrollbar flex flex-col gap-[3px] px-4 overflow-x-auto overflow-y-hidden"
         >
           <SortableProvider ids={sortableIds()}>
             <For each={tracks()}>

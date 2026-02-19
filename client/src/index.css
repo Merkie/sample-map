@@ -47,18 +47,19 @@ input[type="range"].swing-slider::-moz-range-thumb {
   box-shadow: 0 0 6px rgba(100, 225, 225, 0.4);
 }
 
-/* Sequencer grid scrollbar */
-.seq-grid-scroll::-webkit-scrollbar {
+/* Thin scrollbar */
+.thin-scrollbar::-webkit-scrollbar {
+  width: 6px;
   height: 6px;
 }
-.seq-grid-scroll::-webkit-scrollbar-track {
+.thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
-.seq-grid-scroll::-webkit-scrollbar-thumb {
+.thin-scrollbar::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
-.seq-grid-scroll::-webkit-scrollbar-thumb:hover {
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
