@@ -413,6 +413,33 @@ export default function Sequencer() {
           </Show>
         </button>
 
+        {/* Randomize */}
+        <button
+          onClick={handleRandomize}
+          title="Randomize samples"
+          class="tap-fb w-7 h-7 border border-white/[0.12] rounded-md bg-white/[0.04] text-white/50 cursor-pointer flex items-center justify-center shrink-0 p-0"
+        >
+          <Dices size={14} />
+        </button>
+
+        {/* Presets */}
+        <div data-seq-interactive class="shrink-0">
+          <button
+            ref={presetsBtnRef}
+            onClick={() => setShowPresets(!showPresets())}
+            title="Pattern presets"
+            class={cn(
+              "tap-fb w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
+              "flex items-center justify-center shrink-0 p-0",
+              showPresets()
+                ? "bg-accent/[0.12] text-accent"
+                : "bg-white/[0.04] text-white/50",
+            )}
+          >
+            <Library size={14} />
+          </button>
+        </div>
+
         {/* BPM */}
         <div class="flex items-center gap-1.5 shrink-0">
           <span class="text-[0.62rem] font-medium tracking-wider uppercase text-white/35">
@@ -467,33 +494,6 @@ export default function Sequencer() {
           <span class="text-[0.65rem] font-mono text-white/40 w-7 text-right">
             {seqSwing()}%
           </span>
-        </div>
-
-        {/* Randomize */}
-        <button
-          onClick={handleRandomize}
-          title="Randomize samples"
-          class="tap-fb w-7 h-7 border border-white/[0.12] rounded-md bg-white/[0.04] text-white/50 cursor-pointer flex items-center justify-center shrink-0 p-0"
-        >
-          <Dices size={14} />
-        </button>
-
-        {/* Presets */}
-        <div data-seq-interactive class="shrink-0">
-          <button
-            ref={presetsBtnRef}
-            onClick={() => setShowPresets(!showPresets())}
-            title="Pattern presets"
-            class={cn(
-              "tap-fb w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
-              "flex items-center justify-center shrink-0 p-0",
-              showPresets()
-                ? "bg-accent/[0.12] text-accent"
-                : "bg-white/[0.04] text-white/50",
-            )}
-          >
-            <Library size={14} />
-          </button>
         </div>
 
         {/* Save Preset */}
