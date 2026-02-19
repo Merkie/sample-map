@@ -18,7 +18,6 @@ import {
 
 const STEPS = 16;
 
-const ZONE_ORDER = ["kick", "snare", "hihat", "perc"] as const;
 const FALLBACK_TRACKS = [
   { id: "fallback-0", name: "Kick", color: "#818cf8" },
   { id: "fallback-1", name: "Snare", color: "#ef4444" },
