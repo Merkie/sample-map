@@ -135,6 +135,8 @@ export default function App() {
   let canvasRef!: HTMLCanvasElement;
   let seqRef!: HTMLDivElement;
   let seqHeight = 0;
+  const [overlayDismissing, setOverlayDismissing] = createSignal(false);
+  const [overlayGone, setOverlayGone] = createSignal(false);
 
   onMount(() => {
     const e = new SampleMapEngine(canvasRef);
@@ -498,14 +500,22 @@ export default function App() {
       </Show>
 
       {/* Click-to-start overlay */}
-      <Show when={!loading() && !error() && !audioUnlocked()}>
+      <Show when={!loading() && !error() && !overlayGone()}>
         <div
           onClick={() => {
+            if (overlayDismissing()) return;
             const eng = engine();
-            if (eng) eng.ensureAudioCtx();
+            if (eng) {
+              eng.ensureAudioCtx();
+            }
             setAudioUnlocked(true);
+            setOverlayDismissing(true);
+            setTimeout(() => setOverlayGone(true), 500);
           }}
-          class="absolute inset-0 flex flex-col items-center justify-center z-10 cursor-pointer"
+          class={cn(
+            "absolute inset-0 flex flex-col items-center justify-center z-10 cursor-pointer",
+            overlayDismissing() && "woosh-out",
+          )}
           style={{ background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)" }}
         >
           <h1 class="text-[2.5rem] font-extralight tracking-[0.2em] text-white/85 mb-4">

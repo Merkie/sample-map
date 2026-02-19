@@ -102,3 +102,26 @@ input[type="range"].swing-slider::-moz-range-thumb {
     opacity: 0.8;
   }
 }
+
+/* Woosh-out animation for click-to-start overlay */
+@keyframes woosh-out {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+  60% {
+    opacity: 0.4;
+    transform: scale(1.35);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
+    filter: blur(24px);
+  }
+}
+.woosh-out {
+  animation: woosh-out 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
