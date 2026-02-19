@@ -2,6 +2,7 @@ import { onMount, onCleanup, Show, createSignal, createEffect } from "solid-js";
 import { SampleMapEngine } from "./engine";
 import type { SampleNode } from "./engine";
 import Sequencer from "./Sequencer";
+import { cn } from "./lib/cn";
 import {
   engine, setEngine,
   loading, setLoading,
@@ -45,7 +46,6 @@ function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
     }
   }
 
-  // Fallback: if no zones matched, pick up to 4 random nodes
   if (result.length === 0) {
     const shuffled = [...nodes].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, 4);
@@ -85,57 +85,21 @@ function DebugPanel() {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        left: `${pos().x}px`,
-        top: `${pos().y}px`,
-        "z-index": "50",
-        width: "220px",
-        background: "rgba(16,18,24,0.95)",
-        border: "1px solid rgba(255,255,255,0.1)",
-        "border-radius": "8px",
-        "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
-        "backdrop-filter": "blur(16px)",
-        "-webkit-backdrop-filter": "blur(16px)",
-        "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-        "user-select": "none",
-      }}
+      class="fixed z-50 w-[220px] bg-panel/95 border border-white/10 rounded-lg shadow-[0_8px_32px_rgba(0,0,0,0.6)] backdrop-blur-lg select-none"
+      style={{ left: `${pos().x}px`, top: `${pos().y}px` }}
     >
       {/* Draggable header */}
       <div
         onMouseDown={onMouseDown}
-        style={{
-          padding: "8px 12px",
-          cursor: "grab",
-          display: "flex",
-          "align-items": "center",
-          "border-bottom": "1px solid rgba(255,255,255,0.06)",
-        }}
+        class="px-3 py-2 cursor-grab flex items-center border-b border-white/[0.06]"
       >
-        <span
-          style={{
-            "font-size": "0.65rem",
-            "font-weight": "600",
-            "letter-spacing": "0.08em",
-            "text-transform": "uppercase",
-            color: "rgba(255,255,255,0.5)",
-          }}
-        >
+        <span class="text-[0.65rem] font-semibold tracking-wider uppercase text-white/50">
           Debug
         </span>
       </div>
       {/* Options */}
-      <div style={{ padding: "8px 12px" }}>
-        <label
-          style={{
-            display: "flex",
-            "align-items": "center",
-            gap: "8px",
-            cursor: "pointer",
-            "font-size": "0.7rem",
-            color: "rgba(255,255,255,0.7)",
-          }}
-        >
+      <div class="px-3 py-2">
+        <label class="flex items-center gap-2 cursor-pointer text-[0.7rem] text-white/70">
           <input
             type="checkbox"
             checked={showZoneBorders()}
@@ -144,26 +108,11 @@ function DebugPanel() {
               const eng = engine();
               if (eng) eng.showZoneBorders = e.currentTarget.checked;
             }}
-            style={{
-              width: "14px",
-              height: "14px",
-              "accent-color": "rgba(100,225,225,1)",
-              cursor: "pointer",
-            }}
+            class="w-3.5 h-3.5 accent-accent cursor-pointer"
           />
           Show zone borders
         </label>
-        <label
-          style={{
-            display: "flex",
-            "align-items": "center",
-            gap: "8px",
-            cursor: "pointer",
-            "font-size": "0.7rem",
-            color: "rgba(255,255,255,0.7)",
-            "margin-top": "6px",
-          }}
-        >
+        <label class="flex items-center gap-2 cursor-pointer text-[0.7rem] text-white/70 mt-1.5">
           <input
             type="checkbox"
             checked={physicsEnabled()}
@@ -173,12 +122,7 @@ function DebugPanel() {
               const eng = engine();
               if (eng) eng.setPhysicsEnabled(enabled);
             }}
-            style={{
-              width: "14px",
-              height: "14px",
-              "accent-color": "rgba(100,225,225,1)",
-              cursor: "pointer",
-            }}
+            class="w-3.5 h-3.5 accent-accent cursor-pointer"
           />
           d3-force physics
         </label>
@@ -199,23 +143,19 @@ export default function App() {
     e.onSampleCount = (n) => setSampleCount(n);
     e.onNodeSelect = (node) => {
       if (!node) {
-        // Clicked empty space — disarm
         if (armedTrack() >= 0) setArmedTrack(-1);
         return;
       }
 
-      // If sequencer is open, check if clicked node belongs to a track
       if (seqActive()) {
         const samples = seqSamples();
         const trackIdx = samples.findIndex(s => s.id === node.id);
         if (trackIdx >= 0) {
-          // Arm the track this node belongs to
           setArmedTrack(trackIdx);
           return;
         }
       }
 
-      // If a track is armed, replace its sample with the clicked node
       const idx = armedTrack();
       if (idx < 0) return;
       const current = seqSamples();
@@ -225,13 +165,11 @@ export default function App() {
         next[idx] = node;
         return next;
       });
-      // Update highlighted set
       const updated = seqSamples().map((s) => s.id);
       e.highlightedNodeIds = new Set(updated);
     };
     e.render();
 
-    // Reactively set excludeNodeIds when a track is armed (duplicate prevention)
     createEffect(() => {
       const eng = engine();
       if (!eng) return;
@@ -261,8 +199,8 @@ export default function App() {
       ArrowLeft: "ArrowRight", ArrowRight: "ArrowLeft",
     };
     const repeatTimers = new Map<string, ReturnType<typeof setInterval>>();
-    const REPEAT_DELAY = 160;  // ms before repeat starts
-    const REPEAT_RATE = 80;    // ms between repeats
+    const REPEAT_DELAY = 160;
+    const REPEAT_RATE = 80;
 
     const fireArrow = (key: string) => {
       if (heldArrows.has(opposingKey[key])) return;
@@ -282,10 +220,9 @@ export default function App() {
       }
       if (e.key in opposingKey) {
         e.preventDefault();
-        if (e.repeat) return; // ignore OS repeat, we handle our own
+        if (e.repeat) return;
         heldArrows.add(e.key);
         fireArrow(e.key);
-        // Start custom repeat: initial delay, then fast interval
         clearInterval(repeatTimers.get(e.key));
         const timer = setTimeout(() => {
           const iv = setInterval(() => fireArrow(e.key), REPEAT_RATE);
@@ -309,7 +246,6 @@ export default function App() {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
-    // Track sequencer height via ResizeObserver
     const seqObserver = new ResizeObserver(() => {
       seqHeight = seqRef.offsetHeight;
       const eng = engine();
@@ -320,7 +256,6 @@ export default function App() {
     });
     seqObserver.observe(seqRef);
 
-    // Fetch samples from server
     fetchSamples();
 
     onCleanup(() => {
@@ -346,12 +281,10 @@ export default function App() {
       eng.loadSamples(samples);
       eng.zoomToFit();
       eng.start();
-      // Pick sequencer samples once on first load
       if (seqSamples().length === 0) {
         resetSeqTracks(pickSequencerSamples(eng.nodes));
       }
       setLoading(false);
-      // Fetch user presets (non-blocking, non-critical)
       loadPresets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch samples";
@@ -384,26 +317,11 @@ export default function App() {
   };
 
   return (
-    <div
-      style={{
-        width: "100vw",
-        height: "100vh",
-        position: "relative",
-        overflow: "hidden",
-        background: "#000408",
-      }}
-    >
-      {/* Canvas — always fills viewport */}
+    <div class="w-screen h-screen relative overflow-hidden bg-base">
+      {/* Canvas */}
       <canvas
         ref={canvasRef}
-        style={{
-          position: "absolute",
-          inset: "0",
-          display: "block",
-          width: "100%",
-          height: "100%",
-          cursor: "grab",
-        }}
+        class="absolute inset-0 block w-full h-full cursor-grab"
         onMouseDown={(e) => {
           engine()?.onPointerDown(e.clientX, e.clientY);
           e.currentTarget.style.cursor = "grabbing";
@@ -420,93 +338,50 @@ export default function App() {
         }}
       />
 
-      {/* Header — absolute overlay */}
+      {/* Header */}
       <div
         onClick={(e) => {
           if (e.target !== e.currentTarget) return;
           engine()?.onEscape();
           setArmedTrack(-1);
         }}
+        class="absolute top-0 inset-x-0 flex items-center z-20 gap-3 px-3 select-none border-b border-white/[0.06] backdrop-blur-md"
         style={{
-          position: "absolute",
-          top: "0",
-          left: "0",
-          right: "0",
           height: `${HEADER_HEIGHT}px`,
-          display: "flex",
-          "align-items": "center",
           background: "linear-gradient(180deg, rgba(12,14,18,0.92) 0%, rgba(8,10,14,0.88) 100%)",
-          "border-bottom": "1px solid rgba(255,255,255,0.06)",
           "box-shadow": "0 1px 8px rgba(0,0,0,0.5), inset 0 -1px 0 rgba(255,255,255,0.03)",
-          "backdrop-filter": "blur(12px)",
-          "-webkit-backdrop-filter": "blur(12px)",
-          padding: "0 12px",
-          "z-index": "20",
-          gap: "12px",
-          "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          "user-select": "none",
         }}
       >
-        <span
-          style={{
-            "font-size": "0.74rem",
-            "font-weight": "600",
-            "letter-spacing": "0.03em",
-            color: "rgba(255,255,255,0.55)",
-          }}
-        >
+        <span class="text-[0.74rem] font-semibold tracking-wide text-white/55">
           SampleMap
         </span>
 
-        {/* Separator */}
-        <div style={{ width: "1px", height: "12px", background: "rgba(255,255,255,0.08)" }} />
+        <div class="w-px h-3 bg-white/[0.08]" />
 
         <button
           onClick={toggleSeq}
-          style={{
-            background: "none",
-            border: "none",
-            padding: "0 6px",
-            height: `${HEADER_HEIGHT}px`,
-            "font-size": "0.66rem",
-            "font-weight": "500",
-            "letter-spacing": "0.08em",
-            "text-transform": "uppercase",
-            color: seqActive() ? "rgba(100,225,225,1)" : "rgba(255,255,255,0.5)",
-            cursor: "pointer",
-            "font-family": "inherit",
-            "border-bottom": seqActive() ? "2px solid rgba(100,225,225,0.9)" : "2px solid transparent",
-            "box-shadow": "none",
-            transition: "color 0.2s, border-color 0.2s",
-            "margin-bottom": "-1px",
-            outline: "none",
-            "-webkit-tap-highlight-color": "transparent",
-          }}
+          class={cn(
+            "bg-transparent border-0 border-b-2 px-1.5 text-[0.66rem] font-medium tracking-wider uppercase",
+            "cursor-pointer transition-colors duration-200 -mb-px outline-none",
+            seqActive()
+              ? "text-accent border-b-accent/90"
+              : "text-white/50 border-b-transparent",
+          )}
+          style={{ height: `${HEADER_HEIGHT}px` }}
         >
           seq
         </button>
 
         <button
           onClick={() => setDebugActive(!debugActive())}
-          style={{
-            background: "none",
-            border: "none",
-            padding: "0 6px",
-            height: `${HEADER_HEIGHT}px`,
-            "font-size": "0.66rem",
-            "font-weight": "500",
-            "letter-spacing": "0.08em",
-            "text-transform": "uppercase",
-            color: debugActive() ? "rgba(100,225,225,1)" : "rgba(255,255,255,0.5)",
-            cursor: "pointer",
-            "font-family": "inherit",
-            "border-bottom": debugActive() ? "2px solid rgba(100,225,225,0.9)" : "2px solid transparent",
-            "box-shadow": "none",
-            transition: "color 0.2s, border-color 0.2s",
-            "margin-bottom": "-1px",
-            outline: "none",
-            "-webkit-tap-highlight-color": "transparent",
-          }}
+          class={cn(
+            "bg-transparent border-0 border-b-2 px-1.5 text-[0.66rem] font-medium tracking-wider uppercase",
+            "cursor-pointer transition-colors duration-200 -mb-px outline-none",
+            debugActive()
+              ? "text-accent border-b-accent/90"
+              : "text-white/50 border-b-transparent",
+          )}
+          style={{ height: `${HEADER_HEIGHT}px` }}
         >
           debug
         </button>
@@ -520,83 +395,35 @@ export default function App() {
       {/* Loading overlay */}
       <Show when={loading()}>
         <div
-          style={{
-            position: "absolute",
-            inset: "0",
-            display: "flex",
-            "flex-direction": "column",
-            "align-items": "center",
-            "justify-content": "center",
-            background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
-            "z-index": "10",
-          }}
+          class="absolute inset-0 flex flex-col items-center justify-center z-10"
+          style={{ background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)" }}
         >
-          <h1
-            style={{
-              "font-size": "2.5rem",
-              "font-weight": "200",
-              "letter-spacing": "0.2em",
-              color: "rgba(255,255,255,0.85)",
-              margin: "0 0 4px 0",
-              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-            }}
-          >
+          <h1 class="text-[2.5rem] font-extralight tracking-[0.2em] text-white/85 mb-1">
             SAMPLE MAP
           </h1>
-          <p
-            style={{
-              color: "rgba(255,255,255,0.4)",
-              "font-family": "monospace",
-              "font-size": "0.8rem",
-            }}
-          >
+          <p class="text-white/40 font-mono text-[0.8rem]">
             Extracting features &amp; computing t-SNE...
           </p>
         </div>
       </Show>
 
-      {/* Click-to-start overlay — unlocks AudioContext */}
+      {/* Click-to-start overlay */}
       <Show when={!loading() && !error() && !audioUnlocked()}>
         <div
           onClick={() => {
             const eng = engine();
-            if (eng) {
-              // Force-create and resume AudioContext via a user gesture
-              eng.ensureAudioCtx();
-            }
+            if (eng) eng.ensureAudioCtx();
             setAudioUnlocked(true);
           }}
-          style={{
-            position: "absolute",
-            inset: "0",
-            display: "flex",
-            "flex-direction": "column",
-            "align-items": "center",
-            "justify-content": "center",
-            background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
-            "z-index": "10",
-            cursor: "pointer",
-          }}
+          class="absolute inset-0 flex flex-col items-center justify-center z-10 cursor-pointer"
+          style={{ background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)" }}
         >
-          <h1
-            style={{
-              "font-size": "2.5rem",
-              "font-weight": "200",
-              "letter-spacing": "0.2em",
-              color: "rgba(255,255,255,0.85)",
-              margin: "0 0 16px 0",
-              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-            }}
-          >
+          <h1 class="text-[2.5rem] font-extralight tracking-[0.2em] text-white/85 mb-4">
             SAMPLE MAP
           </h1>
           <p
-            style={{
-              color: "rgba(255,255,255,0.4)",
-              "font-family": "monospace",
-              "font-size": "0.85rem",
-              animation: "pulse 2s ease-in-out infinite",
-            }}
+            class="text-white/40 font-mono text-[0.85rem]"
+            style={{ animation: "pulse 2s ease-in-out infinite" }}
           >
             Click anywhere to start
           </p>
@@ -606,70 +433,29 @@ export default function App() {
       {/* Error overlay */}
       <Show when={error()}>
         <div
-          style={{
-            position: "absolute",
-            inset: "0",
-            display: "flex",
-            "flex-direction": "column",
-            "align-items": "center",
-            "justify-content": "center",
-            background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
-            "z-index": "10",
-          }}
+          class="absolute inset-0 flex flex-col items-center justify-center z-10"
+          style={{ background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)" }}
         >
-          <h1
-            style={{
-              "font-size": "2.5rem",
-              "font-weight": "200",
-              "letter-spacing": "0.2em",
-              color: "rgba(255,255,255,0.85)",
-              margin: "0 0 4px 0",
-              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-            }}
-          >
+          <h1 class="text-[2.5rem] font-extralight tracking-[0.2em] text-white/85 mb-1">
             SAMPLE MAP
           </h1>
-          <p
-            style={{
-              color: "rgba(239,68,68,0.8)",
-              "font-family": "monospace",
-              "font-size": "0.85rem",
-              margin: "0 0 20px 0",
-            }}
-          >
+          <p class="text-red-500/80 font-mono text-[0.85rem] mb-5">
             {error()}
           </p>
           <button
             onClick={fetchSamples}
-            style={{
-              background: "none",
-              border: "1px solid rgba(255,255,255,0.15)",
-              color: "rgba(255,255,255,0.5)",
-              padding: "8px 24px",
-              "font-size": "0.75rem",
-              "font-family": "monospace",
-              cursor: "pointer",
-              "border-radius": "3px",
-              "letter-spacing": "0.1em",
-            }}
+            class="bg-transparent border border-white/15 text-white/50 px-6 py-2 text-[0.75rem] font-mono cursor-pointer rounded-sm tracking-wider"
           >
             RETRY
           </button>
         </div>
       </Show>
 
-      {/* Sequencer panel — overlays from bottom, slides up via CSS transform */}
+      {/* Sequencer panel */}
       <div
         ref={seqRef}
-        style={{
-          position: "absolute",
-          bottom: "0",
-          left: "0",
-          right: "0",
-          "z-index": "20",
-          transform: seqActive() ? "translateY(0)" : "translateY(100%)",
-          transition: "transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)",
-        }}
+        class="absolute bottom-0 inset-x-0 z-20 transition-transform duration-[350ms] ease-in-out"
+        style={{ transform: seqActive() ? "translateY(0)" : "translateY(100%)" }}
       >
         <Sequencer />
       </div>
@@ -678,68 +464,22 @@ export default function App() {
       <Show when={showAdaptModal()}>
         {(modal) => (
           <div
-            style={{
-              position: "absolute",
-              inset: "0",
-              display: "flex",
-              "align-items": "center",
-              "justify-content": "center",
-              background: "rgba(0,0,0,0.6)",
-              "backdrop-filter": "blur(8px)",
-              "-webkit-backdrop-filter": "blur(8px)",
-              "z-index": "100",
-            }}
+            class="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur z-[100]"
             onClick={(e) => { if (e.target === e.currentTarget) setShowAdaptModal(null); }}
           >
-            <div
-              style={{
-                width: "380px",
-                background: "rgba(16,18,24,0.97)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                "border-radius": "12px",
-                "box-shadow": "0 16px 48px rgba(0,0,0,0.7)",
-                "backdrop-filter": "blur(20px)",
-                "-webkit-backdrop-filter": "blur(20px)",
-                padding: "24px",
-                "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-              }}
-            >
-              <h3
-                style={{
-                  margin: "0 0 12px 0",
-                  "font-size": "0.9rem",
-                  "font-weight": "600",
-                  color: "rgba(255,255,255,0.9)",
-                }}
-              >
+            <div class="w-[380px] bg-panel/[0.97] border border-white/10 rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.7)] backdrop-blur-xl p-6">
+              <h3 class="mb-3 text-[0.9rem] font-semibold text-white/90">
                 Adaptation Required
               </h3>
-              <p
-                style={{
-                  margin: "0 0 20px 0",
-                  "font-size": "0.76rem",
-                  "line-height": "1.5",
-                  color: "rgba(255,255,255,0.55)",
-                }}
-              >
+              <p class="mb-5 text-[0.76rem] leading-relaxed text-white/55">
                 This preset references samples not in your current bank. It will
                 be loaded using similar samples from your library — the original
                 preset won't be modified.
               </p>
-              <div style={{ display: "flex", gap: "8px", "justify-content": "flex-end" }}>
+              <div class="flex gap-2 justify-end">
                 <button
                   onClick={() => setShowAdaptModal(null)}
-                  style={{
-                    height: "32px",
-                    padding: "0 16px",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    "border-radius": "6px",
-                    color: "rgba(255,255,255,0.6)",
-                    "font-size": "0.72rem",
-                    cursor: "pointer",
-                    "font-family": "inherit",
-                  }}
+                  class="h-8 px-4 bg-white/[0.06] border border-white/10 rounded-md text-white/60 text-[0.72rem] cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -749,18 +489,7 @@ export default function App() {
                     if (fn) fn(modal().preset, true);
                     setShowAdaptModal(null);
                   }}
-                  style={{
-                    height: "32px",
-                    padding: "0 16px",
-                    background: "rgba(100,225,225,0.15)",
-                    border: "1px solid rgba(100,225,225,0.3)",
-                    "border-radius": "6px",
-                    color: "rgba(100,225,225,1)",
-                    "font-size": "0.72rem",
-                    "font-weight": "600",
-                    cursor: "pointer",
-                    "font-family": "inherit",
-                  }}
+                  class="h-8 px-4 bg-accent/15 border border-accent/30 rounded-md text-accent text-[0.72rem] font-semibold cursor-pointer"
                 >
                   Load with My Samples
                 </button>
