@@ -31,6 +31,8 @@ All routes are under `/api`:
 - `GET /api/samples` — sample data as JSON. Query params: `maxDuration=2`, `excludeLoops=true`
 - `GET /api/samples/refresh` — bust cache, re-run extraction
 - `GET /api/audio/{path}` — serve audio files from `samples/`
+- `GET /api/presets` — user-saved presets as JSON
+- `POST /api/presets` — save a new preset
 
 ## State Management
 
@@ -40,7 +42,13 @@ All singleton/global state lives in `client/src/state.ts` as SolidJS signals —
 
 Click **seq** in the header to open the drum sequencer — it slides up from the bottom while the star map smoothly zooms out and pans up to make room. 16-step grid with 4 tracks: Kick, Snare, Hat, Perc. Includes transport controls (play/stop, BPM, swing). Press **spacebar** to toggle play/pause while the sequencer is open. Swing uses MPC 3000-style timing — even steps stay locked to the grid while odd steps get delayed.
 
-The **randomize** (dice) button swaps each track's sample for a random one from the same zone — kicks stay kicks, hihats stay hihats, etc.
+The **randomize** (dice) button swaps each track's sample for a random one from the same zone — kicks stay kicks, hihats stay hihats, etc. **Lock** individual tracks to protect them from randomization — great for locking in samples you like while auditioning alternatives for the rest.
+
+**Drag-and-drop** tracks to reorder them using the grip handle next to each track label.
+
+## Presets
+
+9 factory patterns with genre-accurate BPMs: Four on the Floor, Basic Rock, Hip Hop, Boom Bap (with swing), Trap, Dembow Classic, Dembow Full, Perreo, and Clear. Save your own presets via the save button in the transport bar. When loading a preset, the sequencer tries to keep your current samples if they match the needed zones before picking new ones.
 
 ## Zone Classification
 

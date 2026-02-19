@@ -13,6 +13,7 @@ sample-map/
     state.ts               # Global singleton state (signals for engine, UI, sequencer, debug)
     App.tsx                # Full-viewport canvas + sequencer overlay + debug panel
     Sequencer.tsx          # Drum sequencer UI (FL Studio-style step grid)
+    presets.ts             # Factory preset patterns (FACTORY_PRESETS array)
     engine/
       index.ts             # SampleMapEngine — RAF loop, camera, audio playback
       physics.ts           # d3-force sim with neighbor links
@@ -131,11 +132,13 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 
 ### Preset Library
 
-- **Factory presets**: 7 built-in patterns (Four on the Floor, Basic Rock, Hip Hop, Boom Bap, Trap, Reggaeton, Clear) stored as `FACTORY_PRESETS: SavedPreset[]` in Sequencer.tsx. Each has `samplePath: ""` so they always trigger adaptation
+- **Factory presets**: 9 built-in patterns stored as `FACTORY_PRESETS: SavedPreset[]` in `presets.ts`. Each has `samplePath: ""` so they always trigger adaptation. Patterns with genre-accurate BPMs:
+  - Four on the Floor (120), Basic Rock (120), Hip Hop (90), Boom Bap (90, 45% swing), Trap (140), Dembow Classic (98), Dembow Full (98), Perreo (100), Clear (120)
 - **User presets**: saved via POST to `/api/presets`, persisted in `.sample-map-presets.json`, loaded on startup via GET `/api/presets`
 - **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, tracks: [{ samplePath, sampleCategory, pattern }] }`
 - **Loading flow**: `handleLoadPreset()` checks if all `samplePath` values match loaded nodes. If all match → `applyPreset(preset, false)` (exact). If any missing → shows adaptation modal
-- **Adaptation modal** (`App.tsx`): glassmorphism overlay explaining samples will be zone-matched. "Load with My Samples" calls `applyPreset(preset, true)` which picks random nodes from matching zones
+- **Adaptation modal** (`App.tsx`): glassmorphism overlay explaining samples will be zone-matched. "Load with My Samples" calls `applyPreset(preset, true)` which picks zone-matched replacements
+- **Sample reuse on load**: when loading a preset (adapt or exact), `applyPreset` tries to reuse the user's current samples before picking random ones. Resolution order: exact path match → current sample from matching zone → random zone pick
 - **Save UI**: Save button (lucide `Save` icon) in transport bar opens a dropdown with name input. On save, POSTs to server and appends to `presets` signal
 - **Library dropdown**: two sections — "Patterns" (factory presets) and "My Presets" (user presets, shown only when non-empty)
 
