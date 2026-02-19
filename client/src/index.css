@@ -32,3 +32,9 @@ input[type="range"].swing-slider::-moz-range-thumb {
   background: rgba(100,225,225,0.9);
   box-shadow: 0 0 6px rgba(100,225,225,0.4);
 }
+
+/* Click-to-start pulse animation */
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}

@@ -553,7 +553,7 @@ export class SampleMapEngine {
     this.playSample(node, true);
   }
 
-  private ensureAudioCtx() {
+  ensureAudioCtx() {
     if (!this.audioCtx) {
       this.audioCtx = new AudioContext();
     }

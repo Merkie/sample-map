@@ -42,6 +42,9 @@ export const [seqScatterRadius, setSeqScatterRadius] = createSignal<number[]>(
   Array.from({ length: 4 }, () => 30),
 );
 
+// -- Audio unlock gate --
+export const [audioUnlocked, setAudioUnlocked] = createSignal(false);
+
 // -- Debug panel --
 export const [debugActive, setDebugActive] = createSignal(false);
 export const [showZoneBorders, setShowZoneBorders] = createSignal(false);

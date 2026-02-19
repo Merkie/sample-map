@@ -17,6 +17,7 @@ import {
   setPresets,
   showAdaptModal, setShowAdaptModal,
   applyPresetFn,
+  audioUnlocked, setAudioUnlocked,
   resetSeqTracks,
 } from "./state";
 
@@ -55,7 +56,6 @@ function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
 
 function DebugPanel() {
   const [pos, setPos] = createSignal({ x: 16, y: 48 });
-  const [refreshing, setRefreshing] = createSignal(false);
   let dragging = false;
   let offsetX = 0;
   let offsetY = 0;
@@ -182,43 +182,6 @@ function DebugPanel() {
           />
           d3-force physics
         </label>
-        <button
-          disabled={refreshing()}
-          onClick={async () => {
-            setRefreshing(true);
-            try {
-              const res = await fetch("/api/samples/refresh");
-              if (!res.ok) throw new Error("Refresh failed");
-              const samples = await res.json();
-              const eng = engine();
-              if (eng) {
-                eng.loadSamples(samples);
-                eng.zoomToFit();
-                setSampleCount(samples.length);
-                resetSeqTracks(pickSequencerSamples(eng.nodes));
-              }
-            } catch (err) {
-              console.error("Sample refresh failed:", err);
-            } finally {
-              setRefreshing(false);
-            }
-          }}
-          style={{
-            "margin-top": "8px",
-            width: "100%",
-            height: "28px",
-            background: refreshing() ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            "border-radius": "4px",
-            color: refreshing() ? "rgba(255,255,255,0.3)" : "rgba(255,255,255,0.6)",
-            "font-size": "0.68rem",
-            "font-family": "inherit",
-            cursor: refreshing() ? "default" : "pointer",
-            "letter-spacing": "0.04em",
-          }}
-        >
-          {refreshing() ? "Refreshing..." : "Refresh sample cache"}
-        </button>
       </div>
     </div>
   );
@@ -588,6 +551,54 @@ export default function App() {
             }}
           >
             Extracting features &amp; computing t-SNE...
+          </p>
+        </div>
+      </Show>
+
+      {/* Click-to-start overlay — unlocks AudioContext */}
+      <Show when={!loading() && !error() && !audioUnlocked()}>
+        <div
+          onClick={() => {
+            const eng = engine();
+            if (eng) {
+              // Force-create and resume AudioContext via a user gesture
+              eng.ensureAudioCtx();
+            }
+            setAudioUnlocked(true);
+          }}
+          style={{
+            position: "absolute",
+            inset: "0",
+            display: "flex",
+            "flex-direction": "column",
+            "align-items": "center",
+            "justify-content": "center",
+            background: "radial-gradient(ellipse at center, rgba(5,10,25,0.85) 0%, rgba(0,2,8,0.95) 70%)",
+            "z-index": "10",
+            cursor: "pointer",
+          }}
+        >
+          <h1
+            style={{
+              "font-size": "2.5rem",
+              "font-weight": "200",
+              "letter-spacing": "0.2em",
+              color: "rgba(255,255,255,0.85)",
+              margin: "0 0 16px 0",
+              "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+            }}
+          >
+            SAMPLE MAP
+          </h1>
+          <p
+            style={{
+              color: "rgba(255,255,255,0.4)",
+              "font-family": "monospace",
+              "font-size": "0.85rem",
+              animation: "pulse 2s ease-in-out infinite",
+            }}
+          >
+            Click anywhere to start
           </p>
         </div>
       </Show>
