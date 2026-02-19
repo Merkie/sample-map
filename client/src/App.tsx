@@ -327,7 +327,8 @@ export default function App() {
     canvasRef.addEventListener("touchend", onTouchEnd, { passive: false });
     canvasRef.addEventListener("touchcancel", onTouchEnd, { passive: false });
 
-    window.addEventListener("resize", handleResize);
+    const canvasObserver = new ResizeObserver(handleResize);
+    canvasObserver.observe(canvasRef);
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
 
@@ -349,7 +350,7 @@ export default function App() {
       canvasRef.removeEventListener("touchmove", onTouchMove);
       canvasRef.removeEventListener("touchend", onTouchEnd);
       canvasRef.removeEventListener("touchcancel", onTouchEnd);
-      window.removeEventListener("resize", handleResize);
+      canvasObserver.disconnect();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
       seqObserver.disconnect();
