@@ -246,15 +246,13 @@ export function renderScatterCircles(
   const nodeMap = new Map<string, SampleNode>();
   for (const node of nodes) nodeMap.set(node.id, node);
 
-  const cappedZoom = Math.min(zoom, 1.2);
-
   ctx.save();
   for (const circle of circles) {
     const node = nodeMap.get(circle.nodeId);
     if (!node) continue;
 
     const [sx, sy] = worldToScreen(node.x, node.y);
-    const screenRadius = circle.radius * cappedZoom;
+    const screenRadius = circle.radius * zoom;
 
     // Stroke only — matches polygon line color and thickness
     ctx.beginPath();

@@ -637,6 +637,9 @@ export class SampleMapEngine {
       return;
     }
 
+    // Scatter nodes snap instantly so lines always connect to circle edges
+    const scatterIds = new Set(this.scatterCircles.map(sc => sc.nodeId));
+
     const wasEmpty = this.polygonVertices.length === 0;
 
     // First time — snap directly to node positions, no animation
@@ -668,6 +671,13 @@ export class SampleMapEngine {
     const t = 1 - Math.exp(-SampleMapEngine.POLYGON_LERP_SPEED * dt);
 
     for (const node of targets) {
+      // Scatter-enabled nodes snap instantly so lines meet circle edges
+      if (scatterIds.has(node.id)) {
+        newVertices.push({ x: node.x, y: node.y });
+        newIds.push(node.id);
+        continue;
+      }
+
       const existing = currentPosById.get(node.id);
       if (existing) {
         // Known node — lerp toward its current position
@@ -891,14 +901,13 @@ export class SampleMapEngine {
     }
 
     // Build per-vertex scatter screen radii for polygon line clipping
-    const cappedZoom = Math.min(this.camera.zoom, 1.2);
     const scatterLookup = new Map<string, number>();
     for (const sc of this.scatterCircles) {
       scatterLookup.set(sc.nodeId, sc.radius);
     }
     const polyScatterRadii = this.polygonTargetIds.map(id => {
       const r = scatterLookup.get(id);
-      return r ? r * cappedZoom : 0;
+      return r ? r * this.camera.zoom : 0;
     });
     renderSequencerPolygon(ctx, this.polygonVertices, wts, polyScatterRadii);
     renderSelectionRing(ctx, this.selectionRing, wts, this.camera.zoom);
