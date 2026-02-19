@@ -423,14 +423,17 @@ export default function App() {
         onMouseLeave={() => engine()?.onPointerLeave()}
       />
 
-      {/* Header */}
+      {/* Header — hidden behind click-to-start overlay */}
       <div
         onClick={(e) => {
           if (e.target !== e.currentTarget) return;
           engine()?.onEscape();
           setArmedTrack(-1);
         }}
-        class="absolute top-0 inset-x-0 flex items-center z-20 gap-3 px-3 select-none border-b border-white/[0.06] backdrop-blur-md"
+        class={cn(
+          "absolute top-0 inset-x-0 flex items-center z-20 gap-3 px-3 select-none border-b border-white/[0.06] backdrop-blur-md transition-opacity duration-300",
+          !audioUnlocked() ? "opacity-0 pointer-events-none" : "opacity-100",
+        )}
         style={{
           height: `${HEADER_HEIGHT}px`,
           background: "linear-gradient(180deg, rgba(12,14,18,0.92) 0%, rgba(8,10,14,0.88) 100%)",
