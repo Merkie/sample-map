@@ -128,6 +128,12 @@ export default function Sequencer() {
         node = eng.nodes.find((n) => n.relativePath === track.samplePath && !usedIds.has(n.id));
       }
 
+      // Try to reuse a current sample from the matching zone
+      if (!node) {
+        const current = seqSamples();
+        node = current.find((s) => s.zone === track.sampleCategory && !usedIds.has(s.id));
+      }
+
       // Fall back to zone-based random pick
       if (!node) {
         const zonePool = eng.nodes.filter((n) => n.zone === track.sampleCategory && !usedIds.has(n.id));

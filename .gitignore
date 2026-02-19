@@ -5,3 +5,4 @@ samples/
 .sample-map-cache.json
 .DS_Store
 *.pyc
+.sample-map-presets.json
