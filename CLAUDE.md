@@ -49,8 +49,12 @@ Contains all global signals:
 - `seqSamples` — samples assigned to sequencer tracks
 - `armedTrack` — which track is armed for sample replacement
 - `seqPlaying` — sequencer transport playing/stopped
+- `seqBpm`, `seqSwing` — sequencer BPM and swing amount (global for preset save/load)
 - `debugActive` — debug panel open/closed
 - `showZoneBorders` — toggle zone border rendering
+- `presets` — user-saved presets loaded from server (`SavedPreset[]`)
+- `showAdaptModal` — controls the adaptation modal when loading presets with missing samples
+- `applyPresetFn` — callback signal set by Sequencer, used by adaptation modal to apply presets
 
 ## Key Details
 
@@ -61,10 +65,13 @@ Contains all global signals:
   - `excludeLoops=true` (default) — filters out samples with "loop" in the name. Set to `false` to include.
 - `GET /api/samples/refresh` — bust cache, re-run Python extraction
 - `GET /api/audio/{relativePath}` — serves audio files from `samples/` directory
+- `GET /api/presets` — returns user-saved presets JSON array (or `[]` if none)
+- `POST /api/presets` — saves a new preset; assigns a generated ID (`preset-{timestamp}-{random}`), appends to `.sample-map-presets.json`, returns the preset with ID
 
 ### Caching
 
 - First extraction writes `.sample-map-cache.json` in project root
+- User-saved presets are stored in `.sample-map-presets.json` in project root
 - Subsequent server starts load from cache instantly
 - Delete the cache file or hit `/api/samples/refresh` after adding new samples
 
@@ -112,11 +119,22 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Track colors: Kick = indigo (#818cf8), Snare = red (#ef4444), Hat = yellow (#eab308), Perc = green (#22c55e)
 - Transport bar: play/stop button (also toggled via spacebar when sequencer is open), BPM number input, swing slider with percentage readout
 - Swing uses MPC 3000-style 16ths: even steps (0, 2, 4…) stay locked to the grid, odd steps (1, 3, 5…) get delayed proportionally to the swing amount. 0% = straight, 100% = max delay (~33% of a step duration, roughly triplet feel). Total pair time stays constant so tempo never drifts.
-- **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty
+- **Randomize (dice button)**: zone-aware — each track swaps to a random sample from the same zone (kick→kick, hihat→hihat, etc.), falling back to the full pool only if the zone is empty. Accumulates `usedIds` to prevent duplicates across tracks
 - **Initial sample pick** (`pickSequencerSamples`): picks one sample from each of the preferred zones `["kick", "snare", "hihat", "perc"]` for the default 4 tracks
 - On toggle: sets `engine.bottomMargin` to sequencer height (tracked via `ResizeObserver`) and calls `zoomToFit()`, which animates the camera in sync with the slide
 - Canvas stays full-viewport; the camera zooms out and pans up to keep nodes visible above the sequencer
-- **Deselection**: clicking on the header bar or sequencer background dismisses the selection ring and disarms any armed track (same as clicking empty canvas space). Interactive sequencer elements (track labels, step cells, transport controls, add-track button) are excluded via `data-seq-interactive` attribute so their own click handlers aren't overridden
+- **Deselection**: clicking on the header bar or sequencer background dismisses the selection ring and disarms any armed track (same as clicking empty canvas space). Header uses `e.target === e.currentTarget` guard so child buttons don't trigger deselection. Interactive sequencer elements (track labels, step cells, transport controls, add-track button) are excluded via `data-seq-interactive` attribute so their own click handlers aren't overridden
+- **Duplicate prevention**: clicking a sample already on another track does nothing; arrow-key navigation skips samples on other tracks (`engine.excludeNodeIds`); randomize accumulates `usedIds` so no two tracks share the same sample
+
+### Preset Library
+
+- **Factory presets**: 7 built-in patterns (Four on the Floor, Basic Rock, Hip Hop, Boom Bap, Trap, Reggaeton, Clear) stored as `FACTORY_PRESETS: SavedPreset[]` in Sequencer.tsx. Each has `samplePath: ""` so they always trigger adaptation
+- **User presets**: saved via POST to `/api/presets`, persisted in `.sample-map-presets.json`, loaded on startup via GET `/api/presets`
+- **SavedPreset interface** (`state.ts`): `{ id, name, bpm, swing, tracks: [{ samplePath, sampleCategory, pattern }] }`
+- **Loading flow**: `handleLoadPreset()` checks if all `samplePath` values match loaded nodes. If all match → `applyPreset(preset, false)` (exact). If any missing → shows adaptation modal
+- **Adaptation modal** (`App.tsx`): glassmorphism overlay explaining samples will be zone-matched. "Load with My Samples" calls `applyPreset(preset, true)` which picks random nodes from matching zones
+- **Save UI**: Save button (lucide `Save` icon) in transport bar opens a dropdown with name input. On save, POSTs to server and appends to `presets` signal
+- **Library dropdown**: two sections — "Patterns" (factory presets) and "My Presets" (user presets, shown only when non-empty)
 
 ### Debug Panel
 

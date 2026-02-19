@@ -1,73 +1,80 @@
-import { createSignal, createEffect, onCleanup, createMemo, For, untrack } from "solid-js";
-import { Dices, Library, Plus } from "lucide-solid";
+import { createSignal, createEffect, onCleanup, createMemo, For, Show, untrack } from "solid-js";
+import { Dices, Library, Plus, Save } from "lucide-solid";
 import type { SampleNode } from "./engine";
-import { engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack, seqPlaying, setSeqPlaying } from "./state";
+import {
+  engine, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
+  seqPlaying, setSeqPlaying, seqBpm, setSeqBpm, seqSwing, setSeqSwing,
+  presets, setPresets, setShowAdaptModal, setApplyPresetFn,
+  type SavedPreset,
+} from "./state";
 
 const STEPS = 16;
 
+const ZONE_ORDER = ["kick", "snare", "hihat", "perc"] as const;
+
 // prettier-ignore
-const PRESETS: { name: string; grid: boolean[][] }[] = [
+const FACTORY_PRESETS: SavedPreset[] = [
   {
-    name: "Four on the Floor",
-    grid: [
-      [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false],
-      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-      [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
-      [false,false,false,false, false,false,true,false, false,false,false,false, false,false,true,false],
+    id: "factory-0", name: "Four on the Floor", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, true,false,false,false, true,false,false,false, true,false,false,false] },
+      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
+      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false] },
+      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,true,false, false,false,false,false, false,false,true,false] },
     ],
   },
   {
-    name: "Basic Rock",
-    grid: [
-      [true,false,false,false, false,false,false,false, true,false,true,false, false,false,false,false],
-      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-      [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
-      [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true],
+    id: "factory-1", name: "Basic Rock", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, true,false,true,false, false,false,false,false] },
+      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
+      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false] },
+      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true] },
     ],
   },
   {
-    name: "Hip Hop",
-    grid: [
-      [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false],
-      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,true],
-      [true,false,true,false, true,false,false,true, true,false,true,false, true,false,false,true],
-      [false,false,false,true, false,false,false,false, false,false,false,true, false,false,false,false],
+    id: "factory-2", name: "Hip Hop", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false] },
+      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,true] },
+      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,false,true, true,false,true,false, true,false,false,true] },
+      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,true, false,false,false,false, false,false,false,true, false,false,false,false] },
     ],
   },
   {
-    name: "Boom Bap",
-    grid: [
-      [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false],
-      [false,false,false,false, true,false,false,true, false,false,false,false, true,false,false,false],
-      [true,false,true,true, true,false,true,true, true,false,true,true, true,false,true,true],
-      [false,false,false,false, false,true,false,false, false,false,false,false, false,true,false,false],
+    id: "factory-3", name: "Boom Bap", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, false,false,true,false, false,false,false,false] },
+      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,true, false,false,false,false, true,false,false,false] },
+      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,true, true,false,true,true, true,false,true,true, true,false,true,true] },
+      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,true,false,false, false,false,false,false, false,true,false,false] },
     ],
   },
   {
-    name: "Trap",
-    grid: [
-      [true,false,false,false, false,false,false,false, true,false,false,true, false,false,false,false],
-      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-      [true,true,false,true, true,true,false,true, true,true,false,true, true,true,true,true],
-      [false,false,false,false, false,false,true,false, false,false,false,false, true,false,true,false],
+    id: "factory-4", name: "Trap", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,false, false,false,false,false, true,false,false,true, false,false,false,false] },
+      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
+      { samplePath: "", sampleCategory: "hihat", pattern: [true,true,false,true, true,true,false,true, true,true,false,true, true,true,true,true] },
+      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,true,false, false,false,false,false, true,false,true,false] },
     ],
   },
   {
-    name: "Reggaeton",
-    grid: [
-      [true,false,false,true, false,false,true,false, false,false,false,true, false,false,true,false],
-      [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false],
-      [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false],
-      [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true],
+    id: "factory-5", name: "Reggaeton", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: [true,false,false,true, false,false,true,false, false,false,false,true, false,false,true,false] },
+      { samplePath: "", sampleCategory: "snare", pattern: [false,false,false,false, true,false,false,false, false,false,false,false, true,false,false,false] },
+      { samplePath: "", sampleCategory: "hihat", pattern: [true,false,true,false, true,false,true,false, true,false,true,false, true,false,true,false] },
+      { samplePath: "", sampleCategory: "perc",  pattern: [false,false,false,false, false,false,false,true, false,false,false,false, false,false,false,true] },
     ],
   },
   {
-    name: "Clear",
-    grid: [
-      Array(STEPS).fill(false),
-      Array(STEPS).fill(false),
-      Array(STEPS).fill(false),
-      Array(STEPS).fill(false),
+    id: "factory-6", name: "Clear", bpm: 120, swing: 0,
+    tracks: [
+      { samplePath: "", sampleCategory: "kick",  pattern: Array(STEPS).fill(false) },
+      { samplePath: "", sampleCategory: "snare", pattern: Array(STEPS).fill(false) },
+      { samplePath: "", sampleCategory: "hihat", pattern: Array(STEPS).fill(false) },
+      { samplePath: "", sampleCategory: "perc",  pattern: Array(STEPS).fill(false) },
     ],
   },
 ];
@@ -87,21 +94,108 @@ export default function Sequencer() {
   const [grid, setGrid] = createSignal(
     Array.from({ length: 4 }, () => Array(STEPS).fill(false) as boolean[]),
   );
-  const [bpm, setBpm] = createSignal(120);
-  const [swing, setSwing] = createSignal(0);
   const [currentStep, setCurrentStep] = createSignal(-1);
   const [showPresets, setShowPresets] = createSignal(false);
+  const [showSaveInput, setShowSaveInput] = createSignal(false);
+  const [saveName, setSaveName] = createSignal("");
 
-  const loadPreset = (preset: (typeof PRESETS)[number]) => {
-    const numTracks = tracks().length;
+  /** Apply a preset: resolve samples by path or zone, set grid/bpm/swing */
+  const applyPreset = (preset: SavedPreset, adapt: boolean) => {
+    const eng = engine();
+    if (!eng) return;
+
+    const usedIds = new Set<string>();
+    const resolvedSamples: SampleNode[] = [];
     const newGrid: boolean[][] = [];
-    for (let i = 0; i < numTracks; i++) {
-      newGrid.push(
-        i < preset.grid.length ? [...preset.grid[i]] : Array(STEPS).fill(false),
-      );
+
+    for (const track of preset.tracks) {
+      let node: SampleNode | undefined;
+
+      // Try exact match by path first (if not adapting and path is set)
+      if (!adapt && track.samplePath) {
+        node = eng.nodes.find((n) => n.relativePath === track.samplePath && !usedIds.has(n.id));
+      }
+
+      // Fall back to zone-based random pick
+      if (!node) {
+        const zonePool = eng.nodes.filter((n) => n.zone === track.sampleCategory && !usedIds.has(n.id));
+        const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => !usedIds.has(n.id));
+        if (pool.length > 0) {
+          node = pool[Math.floor(Math.random() * pool.length)];
+        }
+      }
+
+      if (node) {
+        resolvedSamples.push(node);
+        usedIds.add(node.id);
+        newGrid.push([...track.pattern]);
+      }
     }
-    setGrid(newGrid);
+
+    if (resolvedSamples.length > 0) {
+      setSeqSamples(resolvedSamples);
+      setGrid(newGrid);
+      setSeqBpm(preset.bpm);
+      setSeqSwing(preset.swing);
+      eng.highlightedNodeIds = new Set(resolvedSamples.map((s) => s.id));
+    }
     setShowPresets(false);
+  };
+
+  /** Load a preset: check if samples match, show adapt modal if needed */
+  const handleLoadPreset = (preset: SavedPreset) => {
+    const eng = engine();
+    if (!eng) return;
+
+    let missingCount = 0;
+    for (const track of preset.tracks) {
+      if (!track.samplePath || !eng.nodes.find((n) => n.relativePath === track.samplePath)) {
+        missingCount++;
+      }
+    }
+
+    if (missingCount === 0) {
+      applyPreset(preset, false);
+    } else {
+      setShowAdaptModal({ preset, missingCount });
+      setShowPresets(false);
+    }
+  };
+
+  // Register applyPreset so the adaptation modal can call it
+  setApplyPresetFn(() => applyPreset);
+
+  /** Save current state as a user preset */
+  const savePreset = async () => {
+    const name = saveName().trim();
+    if (!name) return;
+
+    const samples = seqSamples();
+    const g = grid();
+    const preset: Omit<SavedPreset, "id"> = {
+      name,
+      bpm: seqBpm(),
+      swing: seqSwing(),
+      tracks: samples.map((s, i) => ({
+        samplePath: s.relativePath,
+        sampleCategory: s.zone,
+        pattern: [...(g[i] || Array(STEPS).fill(false))],
+      })),
+    };
+
+    try {
+      const res = await fetch("/api/presets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(preset),
+      });
+      if (res.ok) {
+        const saved: SavedPreset = await res.json();
+        setPresets((prev) => [...prev, saved]);
+        setSaveName("");
+        setShowSaveInput(false);
+      }
+    } catch { /* silently fail */ }
   };
 
   // Sync grid rows when tracks are added
@@ -135,8 +229,8 @@ export default function Sequencer() {
       const tick = () => {
         // Read grid/bpm/swing without tracking so they don't re-trigger the effect
         const g = untrack(grid);
-        const curBpm = untrack(bpm);
-        const curSwing = untrack(swing);
+        const curBpm = untrack(seqBpm);
+        const curSwing = untrack(seqSwing);
 
         // Trigger samples for active cells
         const samples = untrack(seqSamples);
@@ -276,10 +370,10 @@ export default function Sequencer() {
           </span>
           <input
             type="number"
-            value={bpm()}
+            value={seqBpm()}
             min={40}
             max={300}
-            onInput={(e) => setBpm(parseInt(e.currentTarget.value) || 120)}
+            onInput={(e) => setSeqBpm(parseInt(e.currentTarget.value) || 120)}
             style={{
               width: "48px",
               height: "24px",
@@ -314,14 +408,14 @@ export default function Sequencer() {
               type="range"
               min={0}
               max={100}
-              value={swing()}
-              onInput={(e) => setSwing(parseInt(e.currentTarget.value))}
+              value={seqSwing()}
+              onInput={(e) => setSeqSwing(parseInt(e.currentTarget.value))}
               style={{
                 width: "100%",
                 height: "4px",
                 "-webkit-appearance": "none",
                 appearance: "none",
-                background: `linear-gradient(to right, rgba(100,225,225,0.5) ${swing()}%, rgba(255,255,255,0.08) ${swing()}%)`,
+                background: `linear-gradient(to right, rgba(100,225,225,0.5) ${seqSwing()}%, rgba(255,255,255,0.08) ${seqSwing()}%)`,
                 "border-radius": "2px",
                 outline: "none",
                 cursor: "pointer",
@@ -337,7 +431,7 @@ export default function Sequencer() {
               "text-align": "right",
             }}
           >
-            {swing()}%
+            {seqSwing()}%
           </span>
         </div>
 
@@ -348,10 +442,13 @@ export default function Sequencer() {
             if (!eng) return;
             const current = seqSamples();
             const next: SampleNode[] = [];
+            const usedIds = new Set<string>();
             for (const sample of current) {
-              const zonePool = eng.nodes.filter((n) => n.zone === sample.zone && n.id !== sample.id);
-              const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => n.id !== sample.id);
-              next.push(pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : sample);
+              const zonePool = eng.nodes.filter((n) => n.zone === sample.zone && n.id !== sample.id && !usedIds.has(n.id));
+              const pool = zonePool.length > 0 ? zonePool : eng.nodes.filter((n) => n.id !== sample.id && !usedIds.has(n.id));
+              const picked = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : sample;
+              next.push(picked);
+              usedIds.add(picked.id);
             }
             setSeqSamples(next);
             eng.highlightedNodeIds = new Set(next.map((s) => s.id));
@@ -377,7 +474,7 @@ export default function Sequencer() {
         </button>
 
         {/* Presets */}
-        <div style={{ position: "relative" }}>
+        <div data-seq-interactive style={{ position: "relative" }}>
           <button
             onClick={() => setShowPresets(!showPresets())}
             title="Pattern presets"
@@ -421,7 +518,9 @@ export default function Sequencer() {
                   position: "absolute",
                   bottom: "calc(100% + 6px)",
                   left: "0",
-                  "min-width": "160px",
+                  "min-width": "180px",
+                  "max-height": "320px",
+                  "overflow-y": "auto",
                   background: "rgba(20,22,28,0.97)",
                   border: "1px solid rgba(255,255,255,0.1)",
                   "border-radius": "8px",
@@ -432,10 +531,23 @@ export default function Sequencer() {
                   "z-index": "100",
                 }}
               >
-                <For each={PRESETS}>
+                {/* Section: Patterns */}
+                <div
+                  style={{
+                    padding: "5px 12px 3px",
+                    "font-size": "0.58rem",
+                    "font-weight": "600",
+                    "letter-spacing": "0.1em",
+                    "text-transform": "uppercase",
+                    color: "rgba(255,255,255,0.3)",
+                  }}
+                >
+                  Patterns
+                </div>
+                <For each={FACTORY_PRESETS}>
                   {(preset) => (
                     <div
-                      onClick={() => loadPreset(preset)}
+                      onClick={() => handleLoadPreset(preset)}
                       style={{
                         padding: "7px 12px",
                         "font-size": "0.72rem",
@@ -460,6 +572,155 @@ export default function Sequencer() {
                     </div>
                   )}
                 </For>
+
+                {/* Section: My Presets (only if any exist) */}
+                <Show when={presets().length > 0}>
+                  <div
+                    style={{
+                      height: "1px",
+                      background: "rgba(255,255,255,0.06)",
+                      margin: "4px 8px",
+                    }}
+                  />
+                  <div
+                    style={{
+                      padding: "5px 12px 3px",
+                      "font-size": "0.58rem",
+                      "font-weight": "600",
+                      "letter-spacing": "0.1em",
+                      "text-transform": "uppercase",
+                      color: "rgba(255,255,255,0.3)",
+                    }}
+                  >
+                    My Presets
+                  </div>
+                  <For each={presets()}>
+                    {(preset) => (
+                      <div
+                        onClick={() => handleLoadPreset(preset)}
+                        style={{
+                          padding: "7px 12px",
+                          "font-size": "0.72rem",
+                          color: "rgba(255,255,255,0.75)",
+                          "border-radius": "5px",
+                          cursor: "pointer",
+                          transition: "background 0.1s",
+                          "white-space": "nowrap",
+                        }}
+                        onMouseEnter={(e) =>
+                          (e.currentTarget.style.background =
+                            "rgba(255,255,255,0.08)")
+                        }
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.background = "transparent")
+                        }
+                      >
+                        {preset.name}
+                      </div>
+                    )}
+                  </For>
+                </Show>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Save Preset */}
+        <div data-seq-interactive style={{ position: "relative" }}>
+          <button
+            onClick={() => { setShowSaveInput(!showSaveInput()); setSaveName(""); }}
+            title="Save preset"
+            style={{
+              width: "28px",
+              height: "28px",
+              border: "1px solid rgba(255,255,255,0.12)",
+              "border-radius": "6px",
+              background: showSaveInput()
+                ? "rgba(100,225,225,0.12)"
+                : "rgba(255,255,255,0.04)",
+              color: showSaveInput()
+                ? "rgba(100,225,225,1)"
+                : "rgba(255,255,255,0.5)",
+              cursor: "pointer",
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
+              "flex-shrink": "0",
+              transition: "all 0.15s",
+              padding: "0",
+            }}
+          >
+            <Save size={14} />
+          </button>
+
+          {showSaveInput() && (
+            <>
+              <div
+                onClick={() => setShowSaveInput(false)}
+                style={{
+                  position: "fixed",
+                  inset: "0",
+                  "z-index": "99",
+                }}
+              />
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 6px)",
+                  left: "0",
+                  "min-width": "200px",
+                  background: "rgba(20,22,28,0.97)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  "border-radius": "8px",
+                  "box-shadow": "0 8px 32px rgba(0,0,0,0.6)",
+                  "backdrop-filter": "blur(16px)",
+                  "-webkit-backdrop-filter": "blur(16px)",
+                  padding: "10px 12px",
+                  "z-index": "100",
+                  display: "flex",
+                  gap: "6px",
+                  "align-items": "center",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="Preset name..."
+                  value={saveName()}
+                  onInput={(e) => setSaveName(e.currentTarget.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") savePreset(); }}
+                  autofocus
+                  style={{
+                    flex: "1",
+                    height: "26px",
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    "border-radius": "4px",
+                    color: "rgba(255,255,255,0.8)",
+                    "font-size": "0.72rem",
+                    "font-family": "inherit",
+                    padding: "0 8px",
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={savePreset}
+                  style={{
+                    height: "26px",
+                    padding: "0 10px",
+                    background: "rgba(100,225,225,0.15)",
+                    border: "1px solid rgba(100,225,225,0.3)",
+                    "border-radius": "4px",
+                    color: "rgba(100,225,225,1)",
+                    "font-size": "0.65rem",
+                    "font-weight": "600",
+                    "letter-spacing": "0.05em",
+                    cursor: "pointer",
+                    "font-family": "inherit",
+                    "white-space": "nowrap",
+                  }}
+                >
+                  Save
+                </button>
               </div>
             </>
           )}

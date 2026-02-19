@@ -96,6 +96,9 @@ export class SampleMapEngine {
   // Debug: draw zone borders
   showZoneBorders = false;
 
+  // Duplicate prevention: nodes to exclude from arrow-key navigation
+  excludeNodeIds: Set<string> | null = null;
+
   // Animated polygon vertices (world space, lerped toward target nodes)
   private polygonVertices: Array<{ x: number; y: number }> = [];
   private polygonTargetIds: string[] = [];
@@ -376,6 +379,7 @@ export class SampleMapEngine {
 
     for (const node of this.nodes) {
       if (node === current) continue;
+      if (this.excludeNodeIds?.has(node.id)) continue;
 
       const dx = node.x - current.x;
       const dy = node.y - current.y;

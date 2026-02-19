@@ -13,6 +13,9 @@ import {
   seqPlaying, setSeqPlaying,
   debugActive, setDebugActive,
   showZoneBorders, setShowZoneBorders,
+  setPresets,
+  showAdaptModal, setShowAdaptModal,
+  applyPresetFn,
 } from "./state";
 
 
@@ -29,10 +32,13 @@ function pickSequencerSamples(nodes: SampleNode[]): SampleNode[] {
 
   const preferred = ["kick", "snare", "hihat", "perc"];
   const result: SampleNode[] = [];
+  const usedIds = new Set<string>();
   for (const zone of preferred) {
-    const list = byZone.get(zone);
+    const list = byZone.get(zone)?.filter((n) => !usedIds.has(n.id));
     if (list && list.length > 0) {
-      result.push(list[Math.floor(Math.random() * list.length)]);
+      const pick = list[Math.floor(Math.random() * list.length)];
+      result.push(pick);
+      usedIds.add(pick.id);
     }
   }
 
@@ -163,6 +169,8 @@ export default function App() {
       const idx = armedTrack();
       if (idx < 0) return;
       if (node) {
+        const current = seqSamples();
+        if (current.some((s, i) => i !== idx && s.id === node.id)) return;
         setSeqSamples((prev) => {
           const next = [...prev];
           next[idx] = node;
@@ -177,6 +185,23 @@ export default function App() {
       }
     };
     e.render();
+
+    // Reactively set excludeNodeIds when a track is armed (duplicate prevention)
+    createEffect(() => {
+      const eng = engine();
+      if (!eng) return;
+      const idx = armedTrack();
+      if (idx < 0) {
+        eng.excludeNodeIds = null;
+      } else {
+        const samples = seqSamples();
+        const excluded = new Set<string>();
+        for (let i = 0; i < samples.length; i++) {
+          if (i !== idx) excluded.add(samples[i].id);
+        }
+        eng.excludeNodeIds = excluded;
+      }
+    });
 
     const handleResize = () => {
       const eng = engine();
@@ -281,11 +306,23 @@ export default function App() {
         setSeqSamples(pickSequencerSamples(eng.nodes));
       }
       setLoading(false);
+      // Fetch user presets (non-blocking, non-critical)
+      fetchPresets();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch samples";
       setError(message);
       setLoading(false);
     }
+  };
+
+  const fetchPresets = async () => {
+    try {
+      const res = await fetch("/api/presets");
+      if (res.ok) {
+        const data = await res.json();
+        setPresets(data);
+      }
+    } catch { /* silently ignore */ }
   };
 
   const toggleSeq = () => {
@@ -340,7 +377,8 @@ export default function App() {
 
       {/* Header — absolute overlay */}
       <div
-        onClick={() => {
+        onClick={(e) => {
+          if (e.target !== e.currentTarget) return;
           engine()?.onEscape();
           setArmedTrack(-1);
         }}
@@ -542,6 +580,102 @@ export default function App() {
       >
         <Sequencer />
       </div>
+
+      {/* Adaptation modal */}
+      <Show when={showAdaptModal()}>
+        {(modal) => (
+          <div
+            style={{
+              position: "absolute",
+              inset: "0",
+              display: "flex",
+              "align-items": "center",
+              "justify-content": "center",
+              background: "rgba(0,0,0,0.6)",
+              "backdrop-filter": "blur(8px)",
+              "-webkit-backdrop-filter": "blur(8px)",
+              "z-index": "100",
+            }}
+            onClick={(e) => { if (e.target === e.currentTarget) setShowAdaptModal(null); }}
+          >
+            <div
+              style={{
+                width: "380px",
+                background: "rgba(16,18,24,0.97)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                "border-radius": "12px",
+                "box-shadow": "0 16px 48px rgba(0,0,0,0.7)",
+                "backdrop-filter": "blur(20px)",
+                "-webkit-backdrop-filter": "blur(20px)",
+                padding: "24px",
+                "font-family": "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              }}
+            >
+              <h3
+                style={{
+                  margin: "0 0 12px 0",
+                  "font-size": "0.9rem",
+                  "font-weight": "600",
+                  color: "rgba(255,255,255,0.9)",
+                }}
+              >
+                Adaptation Required
+              </h3>
+              <p
+                style={{
+                  margin: "0 0 20px 0",
+                  "font-size": "0.76rem",
+                  "line-height": "1.5",
+                  color: "rgba(255,255,255,0.55)",
+                }}
+              >
+                This preset references samples not in your current bank. It will
+                be loaded using similar samples from your library — the original
+                preset won't be modified.
+              </p>
+              <div style={{ display: "flex", gap: "8px", "justify-content": "flex-end" }}>
+                <button
+                  onClick={() => setShowAdaptModal(null)}
+                  style={{
+                    height: "32px",
+                    padding: "0 16px",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    "border-radius": "6px",
+                    color: "rgba(255,255,255,0.6)",
+                    "font-size": "0.72rem",
+                    cursor: "pointer",
+                    "font-family": "inherit",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const fn = applyPresetFn();
+                    if (fn) fn(modal().preset, true);
+                    setShowAdaptModal(null);
+                  }}
+                  style={{
+                    height: "32px",
+                    padding: "0 16px",
+                    background: "rgba(100,225,225,0.15)",
+                    border: "1px solid rgba(100,225,225,0.3)",
+                    "border-radius": "6px",
+                    color: "rgba(100,225,225,1)",
+                    "font-size": "0.72rem",
+                    "font-weight": "600",
+                    cursor: "pointer",
+                    "font-family": "inherit",
+                  }}
+                >
+                  Load with My Samples
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Show>
     </div>
   );
 }
