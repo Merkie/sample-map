@@ -48,6 +48,9 @@ export const [seqScatterRadius, setSeqScatterRadius] = createSignal<number[]>(
 // -- Audio unlock gate --
 export const [audioUnlocked, setAudioUnlocked] = createSignal(false);
 
+// -- MP3 export --
+export const [exporting, setExporting] = createSignal(false);
+
 // -- Debug panel --
 export const [debugActive, setDebugActive] = createSignal(false);
 export const [showZoneBorders, setShowZoneBorders] = createSignal(false);

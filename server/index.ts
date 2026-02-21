@@ -88,23 +88,6 @@ Bun.serve({
       }
     }
 
-    // Force re-extraction (bust cache)
-    if (url.pathname === "/api/samples/refresh" && req.method === "GET") {
-      cachedSamples = null;
-      try {
-        if (await Bun.file(CACHE_FILE).exists()) await Bun.write(CACHE_FILE, "");
-      } catch {
-        /* ignore */
-      }
-      try {
-        const samples = await loadOrExtract();
-        return Response.json(samples);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Unknown error";
-        return Response.json({ error: message }, { status: 500 });
-      }
-    }
-
     // Serve audio files: /api/audio/path/to/sample.wav
     if (url.pathname.startsWith("/api/audio/") && req.method === "GET") {
       const relPath = decodeURIComponent(

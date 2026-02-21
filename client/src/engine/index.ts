@@ -645,6 +645,20 @@ export class SampleMapEngine {
     this.audioPlaying.set(playId, { source, gain });
   }
 
+  // ===== Audio Buffer Access (for offline export) =====
+
+  getAudioBuffer(nodeId: string): AudioBuffer | undefined {
+    return this.audioCache.get(nodeId);
+  }
+
+  setAudioBuffer(nodeId: string, buffer: AudioBuffer): void {
+    this.audioCache.set(nodeId, buffer);
+  }
+
+  getAudioContext(): AudioContext {
+    return this.ensureAudioCtx();
+  }
+
   // ===== Polygon Animation =====
 
   private updatePolygonVertices(dt: number) {

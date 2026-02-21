@@ -1,5 +1,5 @@
 import { createSignal, createEffect, onCleanup, createMemo, For, Show, untrack } from "solid-js";
-import { CircleDashed, CircleDotDashed, Dices, GripVertical, Library, Lock, LockOpen, Plus, Save, X } from "lucide-solid";
+import { CircleDashed, CircleDotDashed, Dices, Download, GripVertical, Library, Lock, LockOpen, Plus, Save, X } from "lucide-solid";
 import {
   DragDropProvider,
   DragDropSensors,
@@ -11,6 +11,7 @@ import {
 import type { SampleNode } from "./engine";
 import { FACTORY_PRESETS } from "./presets";
 import { cn } from "./lib/cn";
+import { exportToMp3 } from "./export-mp3";
 import {
   STEPS_PER_BAR, TOTAL_STEPS,
   engine, seqActive, seqSamples, setSeqSamples, armedTrack, setArmedTrack,
@@ -21,6 +22,7 @@ import {
   seqTrackVolumes, setSeqTrackVolumes,
   seqScatterEnabled, setSeqScatterEnabled,
   seqScatterRadius, setSeqScatterRadius,
+  exporting,
   addSeqTrack, removeSeqTrack,
   type SavedPreset,
 } from "./state";
@@ -511,6 +513,24 @@ export default function Sequencer() {
             )}
           >
             <Save size={14} />
+          </button>
+        </div>
+
+        {/* Export MP3 */}
+        <div data-seq-interactive class="shrink-0">
+          <button
+            onClick={() => exportToMp3().catch((err) => alert(`Export failed: ${err.message}`))}
+            disabled={exporting()}
+            title="Export as MP3"
+            class={cn(
+              "tap-fb w-7 h-7 border border-white/[0.12] rounded-md cursor-pointer",
+              "flex items-center justify-center shrink-0 p-0",
+              exporting()
+                ? "bg-accent/[0.12] text-accent animate-pulse"
+                : "bg-white/[0.04] text-white/50",
+            )}
+          >
+            <Download size={14} />
           </button>
         </div>
       </div>
