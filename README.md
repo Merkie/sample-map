@@ -12,11 +12,11 @@ Drop in a folder of drum samples and Sample Map will analyze their sonic charact
 **[Try the live demo](https://samplemap.archers.tools)** — a hosted version loaded with classic drum machine samples from the 80s and 90s. Browse, audition, and sequence everything. (Uploading your own samples requires running locally.)
 
 <p align="center">
-  <img src="YOUR_TRAVERSAL_GIF_URL" alt="Exploring the sample map with arrow key traversal" width="720" />
+  <img src="https://github.com/user-attachments/assets/afae0b16-6703-43bb-a2e2-6224da2f2cd0" alt="Exploring the sample map with arrow key traversal" width="720" />
 </p>
 
 <p align="center">
-  <img src="YOUR_SEQUENCER_GIF_URL" alt="Building a beat in the drum sequencer" width="720" />
+  <img src="https://github.com/user-attachments/assets/4838ab3a-c609-42f9-b86c-5c81048b4984" alt="Building a beat in the drum sequencer" width="720" />
 </p>
 
 ---
