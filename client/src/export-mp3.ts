@@ -182,7 +182,7 @@ export async function exportToMp3() {
     if (tail.length > 0) mp3Chunks.push(tail);
 
     // Build blob and trigger download
-    const blob = new Blob(mp3Chunks, { type: "audio/mp3" });
+    const blob = new Blob(mp3Chunks.map(chunk => new Uint8Array(chunk)), { type: "audio/mp3" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
