@@ -42,7 +42,7 @@ The 26-dimensional feature vectors are normalized with `StandardScaler` and then
 The t-SNE output is also rotated so its principal axis of variance aligns horizontally, making better use of widescreen displays.
 
 <p align="center">
-  <img src="YOUR_TSNE_IMAGE_URL" alt="Raw t-SNE positions before d3-force physics" width="600" />
+  <img src="https://github.com/user-attachments/assets/0d309c98-1b1c-4ce7-bf8e-7bcdca441f66" alt="Raw t-SNE positions before d3-force physics" width="600" />
   <br />
   <em>Raw t-SNE coordinates before physics are applied</em>
 </p>
@@ -57,7 +57,7 @@ After t-SNE, samples are classified into **4 instrument zones**: kick, perc, sna
 4. Clusters are **labeled by average spectral centroid**: lowest frequency content → kick, then perc (tonal hand drums like congas and bongos), then snare (noisy broadband), highest → hi-hat
 
 <p align="center">
-  <img src="YOUR_ZONES_IMAGE_URL" alt="Samples classified into kick, perc, snare, and hi-hat zones" width="600" />
+  <img src="https://github.com/user-attachments/assets/7500f117-33c2-4291-a196-ec0839fcc01b" alt="Samples classified into kick, perc, snare, and hi-hat zones" width="600" />
   <br />
   <em>Zone borders visible with the debug panel — kick (red), perc (yellow), snare (blue), hi-hat (green)</em>
 </p>
