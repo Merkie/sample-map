@@ -14,6 +14,8 @@ sample-map/
     App.tsx                # Full-viewport canvas + sequencer overlay + debug panel
     Sequencer.tsx          # Drum sequencer UI (FL Studio-style step grid)
     presets.ts             # Factory preset patterns (FACTORY_PRESETS array)
+    export-mp3.ts          # Offline render → MP3 export (OfflineAudioContext + lamejs)
+    lamejs.d.ts            # Type declarations for lamejs global
     engine/
       index.ts             # SampleMapEngine — RAF loop, camera, audio playback
       physics.ts           # d3-force sim with neighbor links
@@ -22,6 +24,8 @@ sample-map/
       constants.ts         # All tunable values (physics, zoom, rendering)
       types.ts             # SampleNode interface
       utils.ts             # hexToRgb, hslToHex, lerp, clamp
+  client/public/
+    lame.min.js            # Self-contained lamejs bundle (loaded on demand via script tag)
 ```
 
 ## Running
@@ -58,6 +62,7 @@ Contains all global signals:
 - `seqTrackVolumes` — per-track volume levels (0–1)
 - `seqScatterEnabled` — per-track scatter mode toggle
 - `seqScatterRadius` — per-track scatter radius in world units
+- `exporting` — boolean, true while MP3 export is in progress (disables button, shows pulse)
 - `debugActive` — debug panel open/closed
 - `showZoneBorders` — toggle zone border rendering
 - `physicsEnabled` — toggle d3-force physics on/off (default true)
@@ -82,7 +87,6 @@ Coordinated update functions (replace signal-to-signal sync effects):
 - `GET /api/samples` — returns sample JSON array. Query params:
   - `maxDuration=2` (default) — filter to one-shots only. Set to `0` to disable.
   - `excludeLoops=true` (default) — filters out samples with "loop" in the name. Set to `false` to include.
-- `GET /api/samples/refresh` — bust cache, re-run Python extraction
 - `GET /api/audio/{relativePath}` — serves audio files from `samples/` directory
 - User presets are stored in `localStorage` under the key `"sample-map-presets"` (no server API)
 
@@ -91,7 +95,7 @@ Coordinated update functions (replace signal-to-signal sync effects):
 - First extraction writes `.sample-map-cache.json` in project root
 - User-saved presets are stored in `localStorage` (key: `"sample-map-presets"`)
 - Subsequent server starts load from cache instantly
-- Delete the cache file or hit `/api/samples/refresh` after adding new samples
+- Delete `.sample-map-cache.json` after adding new samples to force re-extraction on next server start
 
 ### Rendering
 
@@ -152,6 +156,7 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Canvas stays full-viewport; the camera zooms out and pans up to keep nodes visible above the sequencer
 - **Deselection**: clicking on the header bar or sequencer background dismisses the selection ring and disarms any armed track (same as clicking empty canvas space). Header uses `e.target === e.currentTarget` guard so child buttons don't trigger deselection. Interactive sequencer elements (track labels, step cells, transport controls, add-track button) are excluded via `data-seq-interactive` attribute so their own click handlers aren't overridden
 - **Duplicate prevention**: clicking a sample already on another track does nothing; arrow-key navigation skips samples on other tracks (`engine.excludeNodeIds`); randomize accumulates `usedIds` so no two tracks share the same sample
+- **MP3 export**: Download button (lucide `Download` icon) in transport bar after Save. Renders the full loop offline via `OfflineAudioContext`, encodes to MP3 with lamejs (192kbps), and triggers a browser download as `sample-map-{bpm}bpm.mp3`. Respects BPM, swing, per-track volumes, and scatter (scatter-enabled tracks pick a random neighbor per step, so each export is a unique take). Empty grids show an alert instead of exporting. Button disabled + pulsing accent while `exporting` signal is true. Lamejs is loaded on demand from `client/public/lame.min.js` via script tag (avoids CJS-to-ESM bundler issues). `data-seq-interactive` attribute prevents deselection
 
 ### Preset Library
 
@@ -177,7 +182,6 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Options:
   - **Show zone borders**: renders dashed convex hull borders per zone with color-coded labels (kick=red, snare=blue, hihat=green, perc=yellow). Borders are clipped against Voronoi bisectors (with 8-unit margin for d3-force drift) so zones never overlap.
   - **d3-force physics**: toggle physics post-processing on/off (default on). When off, nodes snap to raw t-SNE positions. When toggled back on, simulation is recreated and pre-settled. Calls `zoomToFit()` on toggle.
-  - **Refresh sample cache**: re-runs Python feature extraction and reloads samples into the engine. Equivalent to hitting `/api/samples/refresh`. Shows "Refreshing..." state while working.
 - State: `debugActive`, `showZoneBorders`, and `physicsEnabled` signals in `state.ts`; `engine.showZoneBorders` and `engine.physicsEnabled` booleans drive rendering/simulation
 
 ### Audio Playback
@@ -187,6 +191,7 @@ The `zone` field is included in the JSON output and cached. The `SampleNode` typ
 - Samples play to completion — moving across the blob layers sounds
 - AudioBuffers cached after first fetch
 - Requires user interaction to start (browser AudioContext policy)
+- Engine exposes `getAudioBuffer(nodeId)`, `setAudioBuffer(nodeId, buffer)`, and `getAudioContext()` for offline export access to the cache
 
 ### Python Extraction (`server/extract.py`)
 

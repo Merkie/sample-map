@@ -29,7 +29,6 @@ bun run start    # production build → http://localhost:3720
 All routes are under `/api`:
 
 - `GET /api/samples` — sample data as JSON. Query params: `maxDuration=2`, `excludeLoops=true`
-- `GET /api/samples/refresh` — bust cache, re-run extraction
 - `GET /api/audio/{path}` — serve audio files from `samples/`
 - User presets stored in `localStorage` (key: `"sample-map-presets"`)
 
@@ -44,6 +43,10 @@ Click **seq** in the header to open the drum sequencer — it slides up from the
 Each track has a **volume fader** on the left side for per-track mixing. The **randomize** (dice) button swaps each track's sample for a random one from the same zone — kicks stay kicks, hihats stay hihats, etc. **Lock** individual tracks to protect them from randomization — great for locking in samples you like while auditioning alternatives for the rest. **Delete** tracks with the X button — if the track has notes, you'll get a confirmation dialog first.
 
 **Drag-and-drop** tracks to reorder them using the grip handle next to each track label. **Add** new tracks with the + button below the grid.
+
+## MP3 Export
+
+Click the **download** button in the transport bar to export the current pattern as an MP3 file. The export renders the full loop offline using `OfflineAudioContext` and encodes it to MP3 at 192kbps via lamejs. All sequencer settings are respected: BPM, swing timing, per-track volumes, and scatter mode (scatter-enabled tracks pick a random nearby sample for each step, so every export is a unique take). The file downloads as `sample-map-{bpm}bpm.mp3`. The button pulses while the export is in progress.
 
 ## Presets
 
@@ -67,4 +70,5 @@ Click on the header bar, sequencer background, or empty canvas space to dismiss 
 Click **debug** in the header to open a draggable floating panel. Options:
 - **Show zone borders** — draws dashed convex hull borders around each zone with color-coded labels
 - **d3-force physics** — toggle the d3-force post-processing on/off. When off, samples snap to raw t-SNE positions
-- **Refresh sample cache** — re-runs Python feature extraction (equivalent to hitting `/api/samples/refresh`)
+
+To refresh the sample cache after adding new samples, delete `.sample-map-cache.json` and restart the server.
